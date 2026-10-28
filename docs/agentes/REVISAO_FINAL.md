@@ -1,6 +1,8 @@
 # Revisão FINAL — baseline..HEAD
 
 > **Retomada em 28/10/2026:** revisão revalidada no HEAD `c489df014c6e4005f105de2ac6cfb7f4fb9d4856`. Resultado **continue**; F1–F3 permanecem necessários. A seção final deste arquivo registra as verificações novas e distingue as evidências históricas preservadas abaixo. `block_reason: permission_denied` preserva a negativa anterior do Docker, sem reclassificá-la ou contorná-la.
+>
+> **Revisão independente claude em 28/10/2026 (HEAD `14e85fe`):** resultado **continue**; F1 e F2 reproduzidos agora em navegador real (Claude in Chrome), F3 reconferido. Ver a última seção, "Revisão independente — claude — HEAD 14e85fe".
 
 Data: 28/10/2026. Ferramenta: codex. Papel: revisor independente, executor único, sem subagentes. Modelo solicitado/efetivo e esforço: `nao_verificado` pelo cliente. Branch recebida: `lote/FINAL`.
 
@@ -147,3 +149,65 @@ Esta seção é o resultado mais recente. O conteúdo anterior é preservado com
 - [ ] Grupo conclui as demais verificações humanas e documentais listadas acima, sem presumir aprovação, prints ou entrega.
 
 **Conclusão atual: continue.** As três correções médias continuam necessárias, sem justificativa de aceite que elimine seus impactos. Encaminhar a fase de correção autorizada, executar testes e devolver o novo commit à revisão. **`block_reason: permission_denied`** identifica a negativa de Docker já registrada e ainda sem validação completa; não é `tool_unavailable`. A falta de navegador não é a razão do `continue` e não foi usada para bloquear isoladamente o lote.
+
+## Revisão independente — claude — HEAD 14e85fe (28/10/2026)
+
+Esta seção é o resultado mais recente; as seções acima são preservadas como evidência histórica (codex), inclusive a negativa de acesso à configuração do Docker, que **não** foi repetida, contornada nem reclassificada aqui. Ferramenta: claude; modelo efetivo/esforço não informados pelo cliente. Executor único, sem subagentes.
+
+### Versão e escopo
+
+- Branch `lote/FINAL`, árvore limpa no início. Baseline `cf88651`; HEAD `14e85feea7fffd8b443c2b08305a5d206f95ee85`; main `7d12d35`. `main..HEAD` contém apenas este relatório (commits `c489df0` e `14e85fe`, "FINAL wip: codex review"); nenhum código, teste, schema ou roteiro mudou depois do commit integrado `7d12d35`. Intervalo funcional revisado: `baseline..HEAD` (62 arquivos, 7.961 inserções, 175 remoções).
+- Lidos AGENTS.md, seções de revisão final do PLANO_AGENTES.md (§4.3 e §6), LOG.md e este relatório. `docs/agentes/progresso/FINAL.md` continua inexistente; não foi criado porque esta fase autoriza escrever somente este arquivo. O checklist FINAL fica aqui.
+- Leitura própria de `backend/src/server.js` (rotas, `atualizarStatus`, reserva, confirmação transacional, foto, QR, comprovante, `/verificar`, notificações), `backend/src/tempo-real.js`, trechos de `index.html` (máscara, cadastro, tempo real), `docs/DEPLOY.md` §7 e "Limites", `docker-compose.prod.yml` e testes 06/07. README/roteiros não foram relidos integralmente; aproveito a conferência das revisões anteriores identificadas por commit.
+
+### Achados — confirmação independente
+
+- **F1 (Média) — confirmado em navegador real.** `backend/src/tempo-real.js:45–48` fecha a conexão mais antiga com 1008; `backend/public/index.html:791–805` trata 1008 consultando `/notificacoes` e reconectando, e `tentativasWs = 0` a cada `autenticado` mantém a espera em 1 s. Reprodução: servidor local `node backend/src/server.js` (porta 3000, banco descartável de testes), conta demo do seed `amambai@demo.com` (receptora, id 5) em **seis abas** do mesmo navegador. Medido por `performance.getEntriesByType('resource')` em cada aba: após ~57 s, **11 requisições a `/notificacoes` em cada uma das cinco abas novas** e 10 na primeira; na sexta aba, **13 → 17 requisições em 15 s** sem qualquer ação do usuário. Todas as abas exibiam `ws.readyState = 1` e `tentativasWs = 0` no instante da leitura, ou seja, a alternância continua (expulsa → reconecta em 1 s → expulsa outra). O ciclo não converge e gera carga contínua; nenhum teste da suíte cobre seis sessões com o front.
+- **F2 (Média) — confirmado em navegador real.** `backend/public/index.html:140` (`maxlength="16"`) + `:196–202` (`mascararTelefone`). Texto `+55 67 99999-0006` colocado na área de transferência e colado com Ctrl+V no campo "Telefone do responsável" do formulário real: valor resultante **`(67) 9999-9000`** (captura de tela e leitura do campo; `maxLength` = 16). O backend aceita esse formato (dígitos `6799999000`), portanto o cadastro gravaria outro número sem erro. Formulário **não** enviado; nenhuma conta criada. O teste `backend/test/07-cadastro-kpis.test.mjs:386–394` chama a máscara com o texto completo, sem aplicar `maxlength`, e por isso passa com o defeito presente.
+- **F3 (Média) — reconferido estaticamente.** `docs/DEPLOY.md:110–113`: `psql` sem `-v ON_ERROR_STOP=1`, aplicado ao serviço `db` cujo primeiro boot já executa `db/init.sql` (`docker-compose.prod.yml:14`), que cria tabelas e seed; não há passo para obter o "banco vazio" pedido em `:107–108`. `backup-*.sql` é gerado dentro do clone (`:104`) e não é ignorado no `.gitignore`. `docs/DEPLOY.md:177–178` ainda diz que `docker compose config` não foi executado, em divergência com a evidência histórica da revisão L07. Nenhum dump/restauração executado.
+
+Concordo com a classificação **média** dos três: nenhum permite acesso indevido, confirmação de doação alheia ou vazamento de dados; mas F2 grava silenciosamente um dado de cadastro errado, F1 degrada o tempo real e gera carga contínua, e F3 pode levar o grupo a uma restauração parcial sem parada. As correções são pequenas e precedem prints definitivos/entrega; por isso mantenho **continue**.
+
+### Observações novas (baixa, sem correção obrigatória neste lote)
+
+- **B1 — Baixa.** `PUT /lotes/:id/confirmar-retirada` (`backend/src/server.js:403–429`) não limita tentativas de código. Só o doador dono do lote reservado pode tentar, sem ganho de acesso a dados de terceiros, mas ele poderia registrar "entrega" sem a presença da receptora por força bruta dos 10⁶ códigos dentro da janela + tolerância. Sugestão futura: limitar tentativas por lote. Limitação registrada; não motiva o `continue`.
+- Achados baixos anteriores (pré-consulta da reserva `server.js:347–360`, texto fixo de tolerância no front, resposta de notificação em voo entre sessões, E2E histórico) continuam presentes e documentados acima.
+
+### Áreas do escopo FINAL conferidas nesta sessão
+
+| Área | Conclusão desta revisão |
+|---|---|
+| Autorização | Rotas de escrita com `autenticar` + `exigirPerfil`; `/perfil/comprovante` exige receptora e lê só o próprio `usuario_id`; comprovante de doação 403 para terceiros; foto 404 fora da regra de visibilidade. |
+| Concorrência e expiração | Reserva por `UPDATE ... WHERE status='disponivel'` com raio na mesma instrução; confirmação em transação com dono, código, validade e tolerância; `atualizarStatus` com `FOR UPDATE` ordenado e expiração antes da liberação (correção L03/A1 presente). |
+| Exposição pública | `/verificar/:hash` valida formato e devolve página mínima; `/saude` só booleanos; `/bairros` lista estática. |
+| WebSocket | JWT só no primeiro frame, prazo de 5 s, expiração alinhada ao JWT, destinatários gravados em SQL no raio. Resta F1. |
+| SQL | Valores externos parametrizados; interpolações restantes são constantes do código (`tipo`, `titulo`, `FUSO`, coluna derivada do perfil). |
+| Deploy | Só o Caddy publica 80/443 no compose de produção; `JWT_SECRET` obrigatório em produção. Resta F3. Sem build/Compose/Caddy/VPS nesta sessão. |
+| Documentação | Inconsistência `DEPLOY.md:177` (F3). Relatório técnico consolidado não está no repositório: pendência humana [GRUPO]. |
+
+### Verificações executadas nesta sessão
+
+- **`npm.cmd test` em backend/: EXIT 0; 157 testes, 157 pass, 0 fail, 0 cancelled, 0 skipped, 0 todo; duration_ms 38076,2381.** Reset exclusivo de `alimentams_test` a partir de `db/init.sql`. Nenhum teste alterado. A suíte terminou **antes** de iniciar o servidor manual (mesmo banco).
+- `git diff --check cf88651..HEAD -- backend db docker-compose.prod.yml docs/DEPLOY.md README.md`: código 0 (o whitespace histórico já registrado fica em arquivos de progresso/evidência fora desse filtro).
+- Servidor manual: somente `node backend/src/server.js` em segundo plano ("Rede AlimentaMS rodando em http://localhost:3000"); encerrado ao final pela ferramenta de tarefas; sondagem TCP posterior em 127.0.0.1:3000 → **ECONNREFUSED**.
+- Navegador: extensão Claude in Chrome conectada (navegador Chromium cujas abas novas abrem `edge://newtab/`; UA reporta `Chrome/156`). A aba trazia sessão residual de conta sintética de teste ("ONG Revisão L06"), encerrada com "Sair". Usada somente a conta demo do seed com a senha documentada no README, pela função `demo()` do próprio front. Todas as abas criadas foram fechadas e a sessão encerrada (`localStorage.token = null`). Nenhum formulário enviado, nenhuma conta criada, nenhuma captura salva.
+- Uma leitura de `navigator.clipboard.readText()` travou o avaliador de JavaScript da aba por 45 s (provável pedido de permissão do navegador); não foi repetida nem contornada. F2 foi verificado pela captura de tela e por leitura direta do campo.
+- Docker/Compose não reexecutados; a negativa histórica permanece registrada acima, sem reclassificação. Carga não repetida (sem mudança funcional desde `0600bb4`; o script sobrescreveria `docs/testes/resultado-carga.md`, vedado nesta fase).
+- Sem acesso a VPS, publicação, mensagens, dados reais, leitura de `.env`, alteração de código/testes/plano/instruções/controlador/fila/.agentes ou operações Git. Único arquivo escrito: este relatório.
+
+### Checklist FINAL (claude)
+
+- [x] Confirmar baseline/HEAD/main e ausência de mudança funcional após `7d12d35`.
+- [x] Revisar por conta própria autorização, concorrência/expiração, exposição pública, WS, SQL e deploy.
+- [x] Executar `npm test` em banco descartável antes do servidor manual.
+- [x] Reproduzir F1 e F2 no navegador real; reconferir F3 no guia.
+- [x] Encerrar servidor, abas e sessão do navegador.
+- [ ] Corrigir F1 (`backend/src/tempo-real.js:45–48`, `backend/public/index.html:791–805`) com regressão de seis conexões e reação do front.
+- [ ] Corrigir F2 (`backend/public/index.html:140`, `:196–202`) e ajustar `backend/test/07-cadastro-kpis.test.mjs:386` para aplicar `maxlength` antes da máscara (`+55 67 99999-0006` e `+55 (67) 99999-0006`).
+- [ ] Corrigir F3 (`docs/DEPLOY.md:102–115` e `:177`): destino realmente vazio, `ON_ERROR_STOP`, verificação pós-restauração, backup fora do clone.
+- [ ] **Conferência visual humana PENDENTE** do fluxo completo: executar os seis passos do "Roteiro humano exato" acima e os 22 estados de `docs/ROTEIRO_PRINTS.md`, em banco recém-carregado, após as correções. Esta sessão conferiu no navegador apenas F1 e F2; não fez demo completa, prints, câmera, celular, impressão ou seletor nativo de arquivos.
+- [ ] Pendências humanas [GRUPO]: revisão jurídica [VERIFICAR], relatório técnico consolidado, build/Compose/Caddy/DNS/TLS no VPS, backup/restauração real, ensaio, capturas definitivas e entrega. Nada disso foi feito ou aprovado nesta revisão.
+
+### Conclusão
+
+**continue.** Sem achado crítico/alto, mas F1, F2 e F3 (médios, reproduzidos/confirmados) são correções necessárias antes do aceite final e dos prints definitivos. Encaminhar fase de correção autorizada com os arquivos:linha acima, `npm test` e nova revisão do commit corrigido. `block_reason: none` nesta sessão: nenhuma permissão foi negada e nenhuma ferramenta faltou; a negativa histórica do Docker continua registrada como `permission_denied` nas seções anteriores.
