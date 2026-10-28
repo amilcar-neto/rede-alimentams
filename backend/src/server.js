@@ -252,6 +252,9 @@ app.use((erro, req, res, next) => {
     return res.status(415).json({ erro: 'Codificação da requisição não suportada.' });
   if (erro.type === 'request.aborted' || erro.type === 'request.size.invalid')
     return res.status(400).json({ erro: 'Corpo da requisição incompleto ou tamanho inválido.' });
+  // Demais erros do cliente (ex.: corpo comprimido inválido): não ecoar a mensagem original.
+  if (erro.expose && erro.status >= 400 && erro.status < 500)
+    return res.status(erro.status).json({ erro: 'Requisição inválida. Confira os dados enviados.' });
   console.error(erro);
   res.status(500).json({ erro: 'Erro interno do servidor.' });
 });

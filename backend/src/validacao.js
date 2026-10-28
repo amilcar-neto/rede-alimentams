@@ -14,8 +14,9 @@ function corpo(valor, campos) {
 function texto(valor, campo, maximo) {
   if (typeof valor !== 'string') falhar(`${campo} deve ser texto.`);
   const normalizado = valor.trim();
-  if (!normalizado || normalizado.length > maximo || normalizado.includes('\0'))
-    falhar(`${campo} deve ter entre 1 e ${maximo} caracteres, sem caractere nulo.`);
+  if (!normalizado) falhar(`${campo} é obrigatório(a).`);
+  if (normalizado.length > maximo || normalizado.includes('\0'))
+    falhar(`${campo} deve ter no máximo ${maximo} caracteres, sem caractere nulo.`);
   return normalizado;
 }
 

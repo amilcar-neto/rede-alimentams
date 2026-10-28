@@ -117,6 +117,28 @@ test('L01 corpos não objeto, JSON malformado e limite de tamanho retornam erros
   erroJson({ s: response.status, d: await response.json() }, 413);
 });
 
+test('L01 corpo comprimido inválido retorna erro 4xx em JSON, sem 500', async () => {
+  for (const encoding of ['gzip', 'deflate']) {
+    const response = await fetch('http://127.0.0.1:3100/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Encoding': encoding },
+      body: 'isto não é um corpo comprimido', signal: AbortSignal.timeout(10000),
+    });
+    assert.match(response.headers.get('content-type'), /application\/json/);
+    const d = await response.json();
+    assert.ok(response.status >= 400 && response.status < 500, `${encoding}: ${response.status}`);
+    erroJson({ s: response.status, d }, response.status);
+  }
+});
+
+test('L01 mensagem de texto vazio é distinta da de excesso de tamanho', async () => {
+  const vazio = await call('POST', '/auth/register', { ...cadastro, nome: '   ' });
+  erroJson(vazio);
+  assert.match(vazio.d.erro, /obrigat/);
+  const longo = await call('POST', '/auth/register', { ...cadastro, nome: 'x'.repeat(300) });
+  erroJson(longo);
+  assert.match(longo.d.erro, /no máximo/);
+});
+
 test('L01 CNPJ com/sem máscara é normalizado e os dígitos verificadores são exigidos', async () => {
   const client = testClient(testConnection().connectionString);
   await client.connect();
