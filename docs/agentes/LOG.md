@@ -166,3 +166,12 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - `npm test` em backend/: **120 testes / 120 pass / 0 fail / 0 skipped / 0 todo / 0 cancelled**, código 0.
 - Conferência visual parcial pelo navegador (indicadores com números, reserva 482915 visível); **conferência visual humana PENDENTE** (roteiro no checklist L08-nucleo). Servidor manual encerrado.
 - Limitações: bancos existentes exigem recriação; instantes do seed são relativos à criação do banco. **L08 completo continua pendente** (roteiros, carga, fotos).
+
+## 28/10/2026 — L03 — implementação claude
+
+- Executor único, sem subagentes; branch `lote/L03`, Git limpo no início. Sem commits, staging, .git/.agentes/controlador/plano, VPS, publicação ou dados reais. Modelo/esforço: `nao_verificado`.
+- Entregue: `lotes.retirada_ate` (obrigatório, futuro, até o fim do dia da validade) e foto opcional em `bytea` (JPEG/PNG pela assinatura, ≤ 400 KB, base64 estrito); `GET /lotes/:id/foto` só para o doador dono ou receptora que pode ver o lote (demais: 404); listagem só com `tem_foto`/`retirada_ate`; limite de JSON de 700 KB só em POST /lotes (excesso → 400); janela de reserva limitada por `retirada_ate`; lote disponível com prazo vencido expira (decisão minha, coerente com o L02). Front: redução em canvas (≤ 1024 px, JPEG 0,7), prévia, miniatura carregada com token e "retirar até dd/mm hh:mm".
+- Testes: `npm.cmd test` em backend/: **137 pass / 0 fail / 0 skipped / 0 todo / 0 cancelled**, código 0, ~31,9 s. Novo `04-lote.test.mjs` (14 testes). Testes anteriores adaptados só ao novo contrato (`retirada_ate` no POST /lotes); nenhuma asserção apagada ou afrouxada.
+- Conferência visual parcial pelo Claude in Chrome (publicar com foto, miniatura, "retirar até", reserva limitada). **Conferência visual humana PENDENTE** (arquivo injetado por script, sem prints, sem mobile; roteiro no [checklist L03](progresso/L03.md)). Servidor manual encerrado.
+- Limitações: bancos existentes exigem recriação (sem migração); seed sem fotos; `docs/testes/e2e-api.mjs` histórico não atualizado; revisão independente pendente.
+- Próximo passo: controlador repete testes e chama revisão por risco (anexos e acesso a dados).

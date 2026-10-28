@@ -25,7 +25,11 @@ app.use((req, res, next) => {
   });
   next();
 });
-app.use(express.json());
+// O corpo de POST /lotes pode levar a foto em base64 (400 KB viram ~547 mil caracteres); as demais rotas
+// mantêm o limite padrão pequeno.
+const jsonPadrao = express.json();
+const jsonLote = express.json({ limit: '700kb' });
+app.use((req, res, next) => (req.method === 'POST' && req.path === '/lotes' ? jsonLote : jsonPadrao)(req, res, next));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -156,17 +160,24 @@ const notificarReceptoras = (tipo, origem, titulo, raio) =>
 // Cada passo é uma única instrução atômica; FOR UPDATE ordenado evita corrida e deadlock
 // entre chamadas simultâneas (a segunda reavalia as linhas já atualizadas e as ignora).
 async function atualizarStatus() {
-  // Lote vencido → expirado (o código deixa de valer; a reserva fica como histórico).
+  // Lote vencido → expirado (o código deixa de valer; a reserva fica como histórico). Lote ainda
+  // disponível cujo horário limite de retirada passou também expira: ninguém mais consegue reservá-lo.
+  // O mesmo vale para a reserva atrasada (janela + tolerância vencidas) cujo prazo já passou: não há
+  // para quem liberar o lote, então ele expira aqui, sem notificação, antes do passo de liberação.
   await pool.query(
     `WITH vencidos AS (
        SELECT id FROM lotes
-        WHERE status IN ('disponivel','reservado') AND validade < ${HOJE}
+        WHERE (status IN ('disponivel','reservado') AND validade < ${HOJE})
+           OR (status = 'disponivel' AND retirada_ate <= now())
+           OR (status = 'reservado' AND retirada_ate <= now()
+               AND janela_fim + make_interval(mins => $1) < now())
         ORDER BY id FOR UPDATE
      ), expirados AS (
        UPDATE lotes l SET status = 'expirado', codigo = NULL
          FROM vencidos v WHERE l.id = v.id RETURNING l.id
      )
-     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'expirado', NULL FROM expirados`
+     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'expirado', NULL FROM expirados`,
+    [TOLERANCIA_MINUTOS]
   );
   // Janela encerrada há mais que a tolerância sem retirada → volta a disponível para a próxima ONG
   // e avisa as receptoras no raio (a notificação nasce na mesma instrução da liberação).
@@ -199,6 +210,7 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
     const r = await pool.query(
       `SELECT l.id, l.alimento, l.categoria, l.quantidade_kg, l.validade::text AS validade, l.status,
               (l.validade - ${HOJE}) AS dias, r.nome AS reservado_por_nome,
+              ${LOCAL('l.retirada_ate')} AS retirada_ate, (l.foto IS NOT NULL) AS tem_foto,
               ${LOCAL('l.janela_inicio')} AS janela_inicio, ${LOCAL('l.janela_fim')} AS janela_fim
          FROM lotes l LEFT JOIN usuarios r ON r.id = l.reservado_por
         WHERE l.doador_id = $1 AND l.status IN ('disponivel','reservado','expirado')
@@ -213,13 +225,14 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
     `SELECT l.id, l.alimento, l.categoria, l.quantidade_kg, l.validade::text AS validade, l.status,
             (l.validade - ${HOJE}) AS dias, d.nome AS doador, d.bairro,
             ROUND((ST_Distance(d.localizacao, r.localizacao) / 1000)::numeric, 1) AS distancia_km,
+            ${LOCAL('l.retirada_ate')} AS retirada_ate, (l.foto IS NOT NULL) AS tem_foto,
             CASE WHEN l.reservado_por = $1 THEN l.codigo END AS codigo,
             CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_inicio')} END AS janela_inicio,
             CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_fim')} END AS janela_fim
        FROM lotes l
        JOIN usuarios d ON d.id = l.doador_id
        JOIN usuarios r ON r.id = $1
-      WHERE (l.status = 'disponivel' AND l.validade >= ${HOJE}
+      WHERE (l.status = 'disponivel' AND l.validade >= ${HOJE} AND l.retirada_ate > now()
              AND ST_DWithin(d.localizacao, r.localizacao, $2))
          OR (l.status = 'reservado' AND l.reservado_por = $1)
       ORDER BY (l.status = 'reservado') DESC, l.validade, distancia_km`,
@@ -230,31 +243,43 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
 
 // Publicar lote (somente doador). Regras de negócio validadas no servidor.
 app.post('/lotes', autenticar, exigirPerfil('doador'), rota(async (req, res) => {
-  const b = validar.corpo(req.body, ['alimento', 'categoria', 'quantidade_kg', 'validade']);
+  const b = validar.corpo(req.body, ['alimento', 'categoria', 'quantidade_kg', 'validade', 'retirada_ate', 'foto']);
   const alimento = validar.texto(b.alimento, 'Alimento', 200);
   const categoria = validar.opcao(b.categoria, 'Categoria', validar.CATEGORIAS);
   const qtd = validar.quantidade(b.quantidade_kg);
   const validade = validar.data(b.validade);
+  if (b.retirada_ate === undefined) throw new validar.ErroValidacao('Informe o horário limite de retirada.');
+  const textoAte = validar.dataHora(b.retirada_ate, 'Horário limite de retirada');
+  const foto = validar.foto(b.foto);
   await atualizarStatus();
-  const ok = await pool.query(`SELECT $1::date >= ${HOJE} AS ok`, [validade]);
+  const ok = await pool.query(
+    `SELECT $1::date >= ${HOJE} AS ok, ($2::timestamp AT TIME ZONE ${FUSO}) AS ate, now() AS agora,
+            (($1::date + 1)::timestamp AT TIME ZONE ${FUSO}) AS limite`,
+    [validade, textoAte]
+  );
+  const { ate, agora, limite } = ok.rows[0];
   if (!ok.rows[0].ok) return res.status(400).json({ erro: 'Não é permitido publicar lote com data de validade vencida.' });
+  if (ate <= agora) throw new validar.ErroValidacao('O horário limite de retirada deve estar no futuro.');
+  if (ate > limite)
+    throw new validar.ErroValidacao('O horário limite de retirada deve ser até o fim do dia da validade do lote.');
 
   const r = await pool.query(
     `WITH novo AS (
-       INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id, doador_id, alimento, quantidade_kg, validade
+       INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, retirada_ate, foto, foto_tipo)
+       VALUES ($1,$2,$3,$4,$5,$7,$8,$9) RETURNING id, doador_id, alimento, quantidade_kg, validade
      ), evento AS (
        INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'publicado', $1 FROM novo
      ), ${notificarReceptoras('lote_publicado', 'novo', 'Novo lote', '$6')}
      SELECT id, ${NOTIFICACOES_JSON} AS notificacoes FROM novo`,
-    [req.usuario.id, alimento, categoria, qtd, validade, RAIO_METROS]
+    [req.usuario.id, alimento, categoria, qtd, validade, RAIO_METROS, ate, foto?.dados ?? null, foto?.tipo ?? null]
   );
   res.status(201).json({ id: r.rows[0].id });
   tempoReal.publicar(r.rows[0].notificacoes);
 }));
 
 // Reservar (somente receptora), escolhendo a janela de retirada (horário de Campo Grande):
-// começa de agora em diante (folga de 5 min), dura no máximo 2 h e termina até o fim do dia da validade.
+// começa de agora em diante (folga de 5 min), dura no máximo 2 h e termina até o horário limite de
+// retirada do lote (que, por sua vez, não passa do fim do dia da validade).
 // Atômico: o UPDATE condicional garante que apenas a primeira entidade consiga reservar o lote.
 app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
   const id = validar.id(req.params.id);
@@ -269,7 +294,7 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
     `SELECT l.status, l.validade >= ${HOJE} AS vigente,
             ($2::timestamp AT TIME ZONE ${FUSO}) AS inicio,
             ($3::timestamp AT TIME ZONE ${FUSO}) AS fim,
-            now() AS agora,
+            now() AS agora, l.retirada_ate,
             ((l.validade + 1)::timestamp AT TIME ZONE ${FUSO}) AS limite
        FROM lotes l WHERE l.id = $1`,
     [id, textoInicio, textoFim]
@@ -277,6 +302,8 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
   const lote = base.rows[0];
   if (!lote || lote.status !== 'disponivel' || !lote.vigente)
     return res.status(409).json({ erro: 'Este lote não está mais disponível para reserva.' });
+  if (lote.retirada_ate <= lote.agora)
+    return res.status(409).json({ erro: 'O horário limite de retirada deste lote já passou.' });
   if (lote.inicio < lote.agora - INICIO_FOLGA_MINUTOS * 60000)
     throw new validar.ErroValidacao('O início da janela de retirada não pode estar no passado.');
   if (lote.fim <= lote.agora)
@@ -285,6 +312,8 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
     throw new validar.ErroValidacao('O fim da janela deve ser depois do início.');
   if (lote.fim - lote.inicio > JANELA_MAX_MINUTOS * 60000)
     throw new validar.ErroValidacao('A janela de retirada pode ter no máximo 2 horas.');
+  if (lote.fim > lote.retirada_ate && lote.retirada_ate < lote.limite)
+    throw new validar.ErroValidacao('A janela de retirada deve terminar até o horário limite de retirada do lote.');
   if (lote.fim > lote.limite)
     throw new validar.ErroValidacao('A janela de retirada deve terminar até o fim do dia da validade do lote.');
 
@@ -380,6 +409,25 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
   } finally {
     client.release();
   }
+}));
+
+// Foto do lote (L03): só o doador dono ou a receptora que pode ver o lote (a mesma regra da listagem:
+// disponível no raio de 10 km ou reservado por ela). Qualquer outro caso é 404, sem revelar se o lote existe.
+app.get('/lotes/:id/foto', autenticar, rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  const r = await pool.query(
+    `SELECT l.foto, l.foto_tipo FROM lotes l
+      WHERE l.id = $1 AND l.foto IS NOT NULL
+        AND (l.doador_id = $2
+             OR EXISTS (SELECT 1 FROM usuarios u, usuarios d
+                         WHERE u.id = $2 AND u.perfil = 'receptora' AND d.id = l.doador_id
+                           AND ((l.status = 'disponivel' AND l.validade >= ${HOJE} AND l.retirada_ate > now()
+                                 AND ST_DWithin(d.localizacao, u.localizacao, $3))
+                                OR (l.status = 'reservado' AND l.reservado_por = u.id))))`,
+    [id, req.usuario.id, RAIO_METROS]
+  );
+  if (!r.rows.length) return res.status(404).json({ erro: 'Foto não encontrada.' });
+  res.set('Cache-Control', 'private, no-store').type(r.rows[0].foto_tipo).send(r.rows[0].foto);
 }));
 
 // QR de retirada: somente a receptora que mantém a reserva ativa.
@@ -483,6 +531,8 @@ app.use((erro, req, res, next) => {
     return res.status(400).json({ erro: 'URL inválida. Confira o identificador informado.' });
   if (erro.type === 'entity.parse.failed')
     return res.status(400).json({ erro: 'JSON malformado. Envie um objeto JSON válido.' });
+  if (erro.type === 'entity.too.large' && req.method === 'POST' && req.path === '/lotes')
+    return res.status(400).json({ erro: 'A requisição é grande demais. A foto pode ter no máximo 400 KB.' });
   if (erro.type === 'entity.too.large')
     return res.status(413).json({ erro: 'O corpo da requisição excede o tamanho permitido.' });
   if (erro.type === 'charset.unsupported' || erro.type === 'encoding.unsupported')

@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import WebSocket from 'ws';
-import { call, login, dia, hoje, janela, checklist } from './helpers.mjs';
+import { call, login, dia, hoje, janela, checklist, retiradaAte } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 const require = createRequire(import.meta.url);
@@ -51,7 +51,7 @@ const esperarEvento = (c, tipo, lote, ms = 2000) => aguardar(() => recebido(c, t
 const semEvento = (c, lote) => assert.deepEqual(c.quadros.filter((q) => q.lote_id === lote), []);
 
 const publicar = async (token = comper, validade = dia(3)) => {
-  const r = await call('POST', '/lotes', { alimento: 'Lote L05', categoria: 'Panificados', quantidade_kg: 4, validade }, token);
+  const r = await call('POST', '/lotes', { alimento: 'Lote L05', categoria: 'Panificados', quantidade_kg: 4, validade, retirada_ate: retiradaAte(validade) }, token);
   assert.equal(r.s, 201, JSON.stringify(r));
   return r.d.id;
 };
@@ -247,6 +247,23 @@ test('L05 liberação de lote que vence hoje ou amanhã é marcada urgente', asy
   assert.equal((await call('GET', '/lotes', undefined, amambai)).s, 200);
   const n = (await notificacoesDe('amambai@demo.com', id)).find((x) => x.tipo === 'lote_liberado');
   assert.equal(n.urgente, true);
+});
+
+test('L03 reserva atrasada com horário limite vencido expira sem notificar lote_liberado', async () => {
+  const id = await publicar(comper, dia(1));
+  assert.equal((await reservar(id, esperanca)).s, 200);
+  await envelhecer(id);
+  await db.query(`UPDATE lotes SET retirada_ate = now() - interval '1 minute' WHERE id=$1`, [id]);
+  const respostas = await Promise.all([amambai, esperanca, comper, amambai].map((t) => call('GET', '/lotes', undefined, t)));
+  assert.ok(respostas.every((x) => x.s === 200));
+  assert.equal((await db.query('SELECT status FROM lotes WHERE id=$1', [id])).rows[0].status, 'expirado');
+  assert.equal((await db.query('SELECT codigo FROM lotes WHERE id=$1', [id])).rows[0].codigo, null);
+  for (const email of ['esperanca@demo.com', 'amambai@demo.com', 'longe@demo.com', 'comper@demo.com'])
+    assert.equal((await notificacoesDe(email, id)).some((n) => n.tipo === 'lote_liberado'), false, email);
+  assert.deepEqual(
+    (await db.query('SELECT tipo FROM eventos_lote WHERE lote_id=$1 ORDER BY id', [id])).rows.map((x) => x.tipo),
+    ['publicado', 'reservado', 'expirado']);
+  assert.equal((await reservar(id, amambai)).s, 409);
 });
 
 test('L05 reservas simultâneas do mesmo lote geram uma única notificação ao doador', async () => {

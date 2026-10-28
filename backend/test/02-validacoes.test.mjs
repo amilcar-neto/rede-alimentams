@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
 import { once } from 'node:events';
-import { call, login, dia, janela, checklist } from './helpers.mjs';
+import { call, login, dia, janela, checklist, retiradaAte } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 const require = createRequire(import.meta.url);
@@ -15,7 +15,7 @@ const cadastro = {
   nome: 'Entidade sintética L01', email: 'validacoes.l01@example.test', senha: '123456',
   perfil: 'receptora', bairro: 'Centro', cnpj: '11.222.333/0001-81',
 };
-const lote = { alimento: 'Alimento L01', categoria: 'Panificados', quantidade_kg: 1, validade: dia(2) };
+const lote = { alimento: 'Alimento L01', categoria: 'Panificados', quantidade_kg: 1, validade: dia(2), retirada_ate: retiradaAte(dia(2)) };
 const tipos = ['inválido', 123, null, [], {}, true, undefined, '   ', '\0', 'x'.repeat(300)];
 let doador, receptora;
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { resetDatabase, testConnection } from './reset-db.mjs';
-import { call, login, db, dia } from './helpers.mjs';
+import { call, login, db, dia, retiradaAte } from './helpers.mjs';
 
 test('Reset recusa nomes/URLs não autorizados antes de conectar e preserva dados', async () => {
   await db.connect();
@@ -34,7 +34,7 @@ test('Servidor filho e cliente pg usam o mesmo banco de teste', async () => {
   try {
     assert.equal((await client.query('SELECT current_database() AS nome')).rows[0].nome, testConnection().database);
     const response = await call('POST', '/lotes', {
-      alimento: 'Sentinela conexão L00', categoria: 'Panificados', quantidade_kg: 1, validade: dia(1),
+      alimento: 'Sentinela conexão L00', categoria: 'Panificados', quantidade_kg: 1, validade: dia(1), retirada_ate: retiradaAte(dia(1)),
     }, await login('comper@demo.com'));
     assert.equal(response.s, 201);
     assert.equal((await client.query('SELECT alimento FROM lotes WHERE id=$1', [response.d.id])).rows[0]?.alimento,

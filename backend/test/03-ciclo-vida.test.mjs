@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { call, login, dia, hoje, janela, local, checklist } from './helpers.mjs';
+import { call, login, dia, hoje, janela, local, checklist, retiradaAte } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 let comper, sabor, esperanca, amambai, longe;
@@ -10,7 +10,7 @@ const db = testClient(testConnection().connectionString);
 await db.connect();
 
 const publicar = async (token = comper, validade = dia(2)) => {
-  const r = await call('POST', '/lotes', { alimento: 'Lote L02', categoria: 'Panificados', quantidade_kg: 4, validade }, token);
+  const r = await call('POST', '/lotes', { alimento: 'Lote L02', categoria: 'Panificados', quantidade_kg: 4, validade, retirada_ate: retiradaAte(validade) }, token);
   assert.equal(r.s, 201, JSON.stringify(r));
   return r.d.id;
 };

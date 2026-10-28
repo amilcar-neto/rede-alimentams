@@ -47,6 +47,8 @@
   .lote.reservado { border-left-color: var(--azul); }
   .lote.expirado { border-left-color: #9e9e9e; opacity: .8; }
   .secao { margin: 18px 0 10px; font-size: 1rem; color: var(--suave); }
+  .miniatura { display: block; width: 100%; max-height: 150px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; background: var(--fundo); }
+  .previa-foto { display: block; max-width: 220px; max-height: 160px; border-radius: 6px; margin-top: 8px; }
   .janela { margin-top: 8px; }
   .janela .linha2 { grid-template-columns: 1fr; gap: 0; }
   .lote .topo { display: flex; justify-content: space-between; gap: 8px; }
@@ -148,7 +150,8 @@
 let token = localStorage.getItem('token');
 let usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
 let abaAtual = null;
-let imagensQR = [];
+let imagensTemporarias = []; // URLs de blob (QR e fotos) liberadas a cada recarga da lista
+let fotoPronta = Promise.resolve(null); // foto escolhida no formulário, já reduzida (base64) ou em redução
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -286,6 +289,21 @@ function tagValidade(dias) {
 }
 const dataBR = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
 
+// "dd/mm hh:mm" a partir de AAAA-MM-DDTHH:MM (horário de Campo Grande).
+function textoRetirada(iso) {
+  const [d, h] = iso.split('T');
+  if (h !== '00:00') return `${dataBR(d)} ${h}`;
+  const anterior = new Date(`${d}T12:00:00Z`); // 00:00 é o fim do dia anterior
+  anterior.setUTCDate(anterior.getUTCDate() - 1);
+  return `fim do dia ${dataBR(anterior.toISOString().slice(0, 10))}`;
+}
+
+// Sugestão do horário limite: 18:00 do dia da validade; se já estiver perto ou passado, o fim do dia.
+function padraoRetirada(validade, agora = new Date()) {
+  const tarde = `${validade}T18:00`;
+  return tarde > agoraLocal(agora, 30) ? tarde : `${diaSeguinte(validade)}T00:00`;
+}
+
 // "hh:mm–hh:mm" (com a data quando a janela não é de hoje).
 function textoJanela(l, agora = new Date()) {
   const [d1, h1] = l.janela_inicio.split('T'), [d2, h2] = l.janela_fim.split('T');
@@ -317,14 +335,17 @@ function cartaoLote(l, doador) {
       <div class="acao"><span class="tag t-res">reservado por você</span></div>
       <div class="meta">Retire entre <b>${esc(textoJanela(l))}</b> e apresente este código ao doador. Passada a janela (mais 30 min de tolerância), a reserva é liberada para outra entidade.</div>`;
   } else {
-    rodape = `<div id="res${l.id}"><div class="acao">${tagValidade(l.dias)}<button onclick="abrirReserva(${l.id}, '${esc(l.validade)}')">Reservar retirada</button></div></div>`;
+    const ate = l.retirada_ate ? `, '${esc(l.retirada_ate)}'` : '';
+    rodape = `<div id="res${l.id}"><div class="acao">${tagValidade(l.dias)}<button onclick="abrirReserva(${l.id}, '${esc(l.validade)}'${ate})">Reservar retirada</button></div></div>`;
   }
   return `<article class="lote ${reservado ? 'reservado' : ''} ${expirado ? 'expirado' : ''}">
+    ${l.tem_foto ? `<img class="miniatura oculto" id="foto${Number(l.id)}" alt="Foto do lote: ${esc(l.alimento)}">` : ''}
     <div class="topo"><div><h3>${esc(l.alimento)}</h3>
       <div class="meta">${doador ? esc(l.categoria) : esc(l.doador)}</div></div>
       <div class="qtd">${Number(l.quantidade_kg)}<small style="font-size:.7rem;color:var(--suave)"> kg</small></div></div>
     ${doador ? '' : `<div class="meta">Bairro: <b>${esc(l.bairro)}</b> · ${l.distancia_km} km de você</div>`}
     <div class="meta">${esc(l.categoria)} · válido até <b>${dataBR(l.validade)}</b></div>
+    ${l.retirada_ate ? `<div class="meta">retirar até <b>${esc(textoRetirada(l.retirada_ate))}</b></div>` : ''}
     ${doador && !expirado ? tagValidade(l.dias) : ''}
     ${rodape}</article>`;
 }
@@ -339,7 +360,8 @@ async function telaLotes() {
     (doador ? '<h2 class="secao">Ativos</h2>' : '') +
     (ativos.length ? grade(ativos) : `<div class="vazio">${vazio}</div>`) +
     (expirados.length ? `<h2 class="secao">Expirados</h2>${grade(expirados)}` : '');
-  imagensQR.forEach((url) => URL.revokeObjectURL(url)); imagensQR = [];
+  imagensTemporarias.forEach((url) => URL.revokeObjectURL(url)); imagensTemporarias = [];
+  lotes.filter((l) => l.tem_foto).forEach((l) => carregarFoto(l.id));
   if (!doador) lotes.filter((l) => l.status === 'reservado').forEach((l) => carregarQR(l.id));
   aplicarLinkRetirada(lotes);
 }
@@ -357,8 +379,19 @@ async function carregarQR(id) {
     const r = await respostaProtegida(`/lotes/${id}/qrcode`);
     const url = URL.createObjectURL(await r.blob());
     if (!elemento.isConnected) { URL.revokeObjectURL(url); return; }
-    imagensQR.push(url); elemento.src = url;
+    imagensTemporarias.push(url); elemento.src = url;
   } catch { elemento.alt = 'QR indisponível. Apresente o código numérico ao doador.'; }
+}
+
+// A foto só é servida a quem pode ver o lote, então vai com o token (blob), nunca por URL pública.
+async function carregarFoto(id) {
+  const elemento = $('foto' + id);
+  try {
+    const r = await respostaProtegida(`/lotes/${id}/foto`);
+    const url = URL.createObjectURL(await r.blob());
+    if (!elemento.isConnected) { URL.revokeObjectURL(url); return; }
+    imagensTemporarias.push(url); elemento.onerror = () => elemento.remove(); elemento.src = url; elemento.classList.remove('oculto');
+  } catch { elemento.remove(); }
 }
 
 function linkRetirada() {
@@ -379,8 +412,10 @@ function aplicarLinkRetirada(lotes) {
 }
 
 // Mostra a escolha da janela de retirada (máx. 2 h, até o fim do dia da validade).
-function abrirReserva(id, validade) {
-  const inicio = agoraLocal(), limite = `${diaSeguinte(validade)}T00:00`;
+function abrirReserva(id, validade, retiradaAte) {
+  const inicio = agoraLocal();
+  let limite = `${diaSeguinte(validade)}T00:00`;
+  if (retiradaAte && retiradaAte < limite) limite = retiradaAte;
   let fim = agoraLocal(new Date(), 60);
   if (fim > limite) fim = limite;
   $('res' + id).innerHTML = `<div class="janela">
@@ -389,7 +424,7 @@ function abrirReserva(id, validade) {
       <div><label for="ji${id}">Retirar a partir de</label><input id="ji${id}" type="datetime-local" value="${inicio}" min="${inicio}" max="${limite}"></div>
       <div><label for="jf${id}">Até</label><input id="jf${id}" type="datetime-local" value="${fim}" min="${inicio}" max="${limite}"></div>
     </div>
-    <div class="meta">Janela de no máximo 2 horas, até o fim do dia da validade (horário de Campo Grande).</div>
+    <div class="meta">Janela de no máximo 2 horas, até ${retiradaAte && retiradaAte <= limite ? `o horário limite de retirada do lote (${esc(textoRetirada(retiradaAte))})` : 'o fim do dia da validade'} (horário de Campo Grande).</div>
     <div class="acao"><button onclick="reservar(${id})">Confirmar reserva</button><button class="link" onclick="irPara('lotes')">Cancelar</button></div></div>`;
 }
 
@@ -425,15 +460,87 @@ function telaPublicar() {
         <select id="pCategoria"><option>Hortifrúti</option><option>Panificados</option><option>Laticínios</option><option>Refeições prontas</option><option>Não perecíveis</option></select></div>
       <div><label for="pQtd">Quantidade (kg)</label><input id="pQtd" type="number" min="0.01" max="10000" step="0.01"></div>
     </div>
-    <label for="pValidade">Válido até</label><input id="pValidade" type="date" value="${amanha}">
+    <label for="pValidade">Válido até</label><input id="pValidade" type="date" value="${amanha}" onchange="ajustarRetirada()">
+    <label for="pRetirada">Retirar até (horário limite)</label>
+    <input id="pRetirada" type="datetime-local" value="${padraoRetirada(amanha)}" min="${agoraLocal()}" max="${diaSeguinte(amanha)}T00:00">
+    <div class="meta">Depois deste horário o lote deixa de ser oferecido. No máximo até o fim do dia da validade.</div>
+    <label for="pFoto">Foto do alimento (opcional)</label>
+    <input id="pFoto" type="file" accept="image/*" onchange="escolherFoto(this)">
+    <img class="previa-foto oculto" id="pPrevia" alt="Pré-visualização da foto escolhida">
     <p><button onclick="publicar()">Publicar lote</button></p>
-    <p class="meta">O sistema não permite publicar lotes com data vencida ou quantidade inválida.</p></div>`;
+    <p class="meta">O sistema não permite publicar lotes com data vencida, quantidade inválida ou horário limite fora do prazo. A foto é reduzida (até 1024 px) antes do envio.</p></div>`;
+  fotoPronta = Promise.resolve(null);
+}
+
+// Ao mudar a validade, o horário limite acompanha o novo dia (e o máximo permitido).
+function ajustarRetirada() {
+  const validade = $('pValidade').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(validade)) return;
+  $('pRetirada').value = padraoRetirada(validade);
+  $('pRetirada').max = `${diaSeguinte(validade)}T00:00`;
+}
+
+const FOTO_LADO_MAX = 1024, FOTO_BYTES_MAX = 400 * 1024;
+
+function lerBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onload = () => resolve(String(leitor.result).split(',')[1] || '');
+    leitor.onerror = () => reject(new Error('Não foi possível ler a imagem.'));
+    leitor.readAsDataURL(blob);
+  });
+}
+
+// Reduz a imagem no navegador: lado maior de até 1024 px, JPEG (qualidade 0,7; cai se passar de 400 KB).
+async function reduzirImagem(arquivo) {
+  if (!arquivo.type.startsWith('image/')) throw new Error('Escolha um arquivo de imagem (JPEG ou PNG).');
+  const url = URL.createObjectURL(arquivo);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('Não foi possível ler a imagem escolhida. Use JPEG ou PNG.'));
+      i.src = url;
+    });
+    const escala = Math.min(1, FOTO_LADO_MAX / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * escala));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); // PNG transparente → fundo branco
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    for (const qualidade of [0.7, 0.5, 0.35]) {
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', qualidade));
+      if (blob && blob.size <= FOTO_BYTES_MAX) return { base64: await lerBase64(blob), blob };
+    }
+    throw new Error('Não foi possível reduzir a imagem para até 400 KB. Escolha outra foto.');
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function escolherFoto(input) {
+  const previa = $('pPrevia');
+  previa.classList.add('oculto'); previa.removeAttribute('src');
+  msg('erroLote', '');
+  const arquivo = input.files && input.files[0];
+  if (!arquivo) { fotoPronta = Promise.resolve(null); return; }
+  const pronta = reduzirImagem(arquivo);
+  fotoPronta = pronta;
+  pronta.then((r) => {
+    if (fotoPronta !== pronta) return;
+    previa.onload = () => URL.revokeObjectURL(previa.src);
+    previa.src = URL.createObjectURL(r.blob); previa.classList.remove('oculto');
+  }).catch((e) => {
+    if (fotoPronta !== pronta) return;
+    input.value = ''; fotoPronta = Promise.resolve(null); msg('erroLote', e.message);
+  });
 }
 async function publicar() {
   try {
+    const foto = await fotoPronta;
     await api('POST', '/lotes', {
       alimento: $('pAlimento').value, categoria: $('pCategoria').value,
       quantidade_kg: $('pQtd').value, validade: $('pValidade').value,
+      retirada_ate: $('pRetirada').value, ...(foto ? { foto: foto.base64 } : {}),
     });
     await irPara('lotes');
     $('aviso').innerHTML = '<div class="msg ok">Lote publicado. As entidades num raio de 10 km já podem reservá-lo.</div>';

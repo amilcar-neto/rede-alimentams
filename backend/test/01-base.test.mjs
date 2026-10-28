@@ -1,5 +1,5 @@
 // Adaptado de docs/testes/e2e-api.mjs; verificações originais preservadas.
-import { call, login, ok, dia, hoje, janela, checklist } from './helpers.mjs';
+import { call, login, ok, dia, hoje, janela, checklist, retiradaAte } from './helpers.mjs';
 
 const comper = await login('comper@demo.com'), sabor = await login('sabor@demo.com');
 const esp = await login('esperanca@demo.com'), amb = await login('amambai@demo.com'), longe = await login('longe@demo.com');
@@ -9,7 +9,7 @@ ok('Sem token -> 401', (await call('GET', '/lotes')).s === 401);
 ok('Token inválido -> 401', (await call('GET', '/lotes', undefined, 'abc')).s === 401);
 
 // ---- Cenário 1: E2E hortifrúti 50 kg, Comper (Centro) -> Monte Castelo / Amambai
-let r = await call('POST', '/lotes', { alimento: 'Frutas E2E', categoria: 'Hortifrúti', quantidade_kg: 50, validade: dia(2) }, comper);
+let r = await call('POST', '/lotes', { alimento: 'Frutas E2E', categoria: 'Hortifrúti', quantidade_kg: 50, validade: dia(2), retirada_ate: retiradaAte(dia(2)) }, comper);
 ok('C1 publicar lote 50kg', r.s === 201, JSON.stringify(r.d));
 const id = r.d?.id;
 const le = (await call('GET', '/lotes', undefined, esp)).d, la = (await call('GET', '/lotes', undefined, amb)).d;
@@ -40,7 +40,7 @@ const ind1 = (await call('GET', '/indicadores', undefined, comper)).d;
 ok('C1 indicadores atualizados (+50kg)', ind1.kg - ind0.kg === 50, `${ind0.kg} -> ${ind1.kg}`);
 
 // ---- Cenário 2: regras de negócio
-const pub = (b) => call('POST', '/lotes', { alimento: 'Teste', categoria: 'Panificados', quantidade_kg: 5, validade: dia(1), ...b }, comper);
+const pub = (b) => call('POST', '/lotes', { alimento: 'Teste', categoria: 'Panificados', quantidade_kg: 5, validade: dia(1), retirada_ate: retiradaAte(b.validade ?? dia(1)), ...b }, comper);
 for (const [nome, b, esperado] of [
   ['qtd 0', { quantidade_kg: 0 }, 400], ['qtd negativa', { quantidade_kg: -3 }, 400], ['qtd texto', { quantidade_kg: 'abc' }, 400],
   ['qtd vazia', { quantidade_kg: '' }, 400], ['validade ontem', { validade: dia(-1) }, 400], ['validade inválida', { validade: '2026-02-31' }, 400],
@@ -69,7 +69,7 @@ ok('reservar id não numérico não dá 500', r.s !== 500, `status=${r.s} ${JSON
 ok('login body vazio não dá 500', (await call('POST', '/auth/login', {})).s === 401);
 
 // ---- Cenário 3: 20 requisições simultâneas de busca + reserva
-r = await call('POST', '/lotes', { alimento: 'Carga', categoria: 'Panificados', quantidade_kg: 3, validade: dia(1) }, sabor);
+r = await call('POST', '/lotes', { alimento: 'Carga', categoria: 'Panificados', quantidade_kg: 3, validade: dia(1), retirada_ate: retiradaAte(dia(1)) }, sabor);
 const idc = r.d.id; const t0 = Date.now();
 const reqs = [];
 for (let i = 0; i < 10; i++) reqs.push(call('GET', '/lotes', undefined, i % 2 ? esp : amb));
