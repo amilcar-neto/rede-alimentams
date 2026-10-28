@@ -29,3 +29,12 @@
 - Servidor temporário local de teste visual usou somente a conexão validada de alimentams_test; foi encerrado e a ausência de resposta HTTP na porta 3100 conferida antes da suíte final. Nenhum banco de desenvolvimento/produção ou dado real utilizado.
 - Conferência do diff: mudanças restritas ao L01, `git diff --check` sem erros (avisos LF/CRLF). Nenhum commit, git add, troca de branch, merge, push, acesso a VPS, deploy, publicação ou mensagem a terceiros. Encerramento aproximadamente 00:56, America/Campo_Grande.
 - Resultado **blocked**: código e critérios automatizados concluídos, mas a validação visual obrigatória depende de acesso autorizado ao navegador ou execução pelo controlador/grupo. [Checklist e roteiro de retomada](progresso/L01.md). Após essa validação, controlador repete testes e chama a revisão separada aplicável; revisão independente não ocorreu nesta sessão.
+
+## 28/10/2026 — L01 — retomada codex, 01:13 (America/Campo_Grande)
+
+- Papel: executor; modelo solicitado/efetivo e esforço: nao_verificado. Sem subagentes. Branch `lote/L01`, HEAD `6033330`, árvore inicialmente limpa; implementação preservada, sem mudanças de código/testes/configurações.
+- Releitura das regras, seção L01, checklist, log e pendências históricas. Guarda do reset conferida antes da suíte; usado somente o banco local descartável `alimentams_test` recebido pelo ambiente, sem leitura de arquivos de credenciais.
+- `npm.cmd test` em backend/: código **0**, **65 aprovados / 0 fail / 0 todo / 0 skipped / 0 cancelled**, node:test **8143,5716 ms**, saída observada nesta retomada. Inclui fuzz, nove pendências corrigidas e teste programático do script do front. Arquivo L01-execucao.txt anterior preservado.
+- Nenhum novo teste manual visual ou print. Sem nova autorização informada, não repetido o acesso ao Firefox negado anteriormente (`Computer Use was not approved to use Firefox`). Essa restrição não foi contornada. Revisão independente/humana não realizada.
+- Resultado **blocked**: falta a conferência visual obrigatória descrita no [checklist L01](progresso/L01.md). Próximo passo depende do controlador/grupo: autorizar acesso ao navegador ou executar o roteiro visual em banco descartável e registrar resultados; depois repetir testes e chamar revisão separada.
+- Alterados apenas checklist e LOG.md; nenhum commit, git add, troca de branch, merge, acesso ao VPS, publicação, mensagem externa ou alteração em .git/.agentes/controlador/plano/instruções. Consumo e duração total não medidos.
