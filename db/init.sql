@@ -107,3 +107,88 @@ INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade) VALU
 
 INSERT INTO eventos_lote (lote_id, tipo, usuario_id)
 SELECT id, 'publicado', doador_id FROM lotes;
+
+-- Histórico de 30 dias: 16 doações entregues, com lote, eventos e comprovante coerentes com o
+-- fluxo atual (checklist completo, JSON canônico v1 e SHA-256 conferíveis em /verificar/:hash).
+-- Datas relativas a hoje (America/Campo_Grande), sempre no passado: os indicadores começam com números.
+-- Os lotes 1 a 4 acima permanecem os primeiros; o histórico recebe ids a partir do 5.
+WITH h(n, doador_id, receptor_id, alimento, categoria, kg, dias, hora) AS (VALUES
+  ( 1, 1, 4, 'Frutas variadas',     'Hortifrúti',         42.00, 30,  9),
+  ( 2, 2, 5, 'Marmitas do dia',     'Refeições prontas',  20.00, 28, 14),
+  ( 3, 3, 4, 'Pães e panificados',  'Panificados',         9.50, 26,  8),
+  ( 4, 1, 5, 'Legumes e verduras',  'Hortifrúti',         35.00, 24, 10),
+  ( 5, 2, 4, 'Arroz e feijão',      'Refeições prontas',  25.00, 22, 13),
+  ( 6, 3, 5, 'Pães e panificados',  'Panificados',        12.00, 20,  8),
+  ( 7, 1, 4, 'Iogurtes e queijos',  'Laticínios',         18.00, 18, 11),
+  ( 8, 2, 5, 'Marmitas do dia',     'Refeições prontas',  16.00, 16, 14),
+  ( 9, 1, 5, 'Frutas variadas',     'Hortifrúti',         50.00, 14,  9),
+  (10, 3, 4, 'Pães e panificados',  'Panificados',         7.50, 12,  8),
+  (11, 2, 4, 'Marmitas do dia',     'Refeições prontas',  22.00, 10, 14),
+  (12, 1, 5, 'Legumes e verduras',  'Hortifrúti',         30.00,  8, 10),
+  (13, 3, 5, 'Pães e panificados',  'Panificados',        11.00,  6,  8),
+  (14, 1, 4, 'Iogurtes e queijos',  'Laticínios',         14.00,  4, 11),
+  (15, 2, 5, 'Arroz e feijão',      'Refeições prontas',  28.00,  2, 13),
+  (16, 1, 4, 'Frutas variadas',     'Hortifrúti',         38.00,  1,  9)
+), t AS (
+  SELECT h.*, lpad(((n * 104729) % 1000000)::text, 6, '0') AS codigo,
+         (((now() AT TIME ZONE 'America/Campo_Grande')::date - dias) + hora * interval '1 hour')
+           AT TIME ZONE 'America/Campo_Grande' AS entrega
+    FROM h
+), l AS (
+  INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, status, reservado_por, reservado_em,
+                     codigo, janela_inicio, janela_fim, criado_em)
+  SELECT doador_id, alimento, categoria, kg, (entrega AT TIME ZONE 'America/Campo_Grande')::date, 'entregue', receptor_id,
+         entrega - interval '2 hours', codigo, entrega - interval '1 hour', entrega + interval '30 minutes',
+         entrega - interval '5 hours'
+    FROM t ORDER BY n
+  RETURNING id, codigo
+), ev AS (
+  INSERT INTO eventos_lote (lote_id, tipo, usuario_id, criado_em)
+  SELECT l.id, e.tipo,
+         CASE e.tipo WHEN 'reservado' THEN t.receptor_id ELSE t.doador_id END,
+         t.entrega - e.antes
+    FROM l JOIN t USING (codigo)
+   CROSS JOIN (VALUES ('publicado', interval '5 hours'), ('reservado', interval '2 hours'),
+                      ('entregue', interval '0')) AS e(tipo, antes)
+), c AS (
+  SELECT l.id AS lote_id, t.*, d.nome AS d_nome, d.cnpj AS d_cnpj, r.nome AS r_nome, r.cnpj AS r_cnpj,
+         to_char(t.entrega AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS instante
+    FROM l JOIN t USING (codigo)
+    JOIN usuarios d ON d.id = t.doador_id
+    JOIN usuarios r ON r.id = t.receptor_id
+), j AS (
+  SELECT c.*,
+    '{"alimento":' || to_json(alimento)::text ||
+    ',"checklist":{"dentro_validade":true,"embalagem_integra":true,"temperatura_adequada":true}' ||
+    ',"codigo":"' || codigo || '","data_hora":"' || instante || '"' ||
+    ',"doador":{"cnpj":"' || d_cnpj || '","id":' || doador_id || ',"nome":' || to_json(d_nome)::text || '}' ||
+    ',"lote_id":' || lote_id || ',"quantidade_kg":"' || kg::text || '"' ||
+    ',"receptora":{"cnpj":"' || r_cnpj || '","id":' || receptor_id || ',"nome":' || to_json(r_nome)::text || '}' ||
+    ',"versao":1}' AS canonico
+    FROM c
+)
+INSERT INTO doacoes (lote_id, doador_id, receptor_id, alimento, quantidade_kg, codigo, data_hora, checklist, comprovante, hash)
+SELECT lote_id, doador_id, receptor_id, alimento, kg, codigo, entrega,
+       '{"embalagem_integra":true,"temperatura_adequada":true,"dentro_validade":true}'::jsonb,
+       canonico::jsonb, encode(sha256(convert_to(canonico, 'UTF8')), 'hex')
+  FROM j;
+
+-- Reserva perto de expirar (Padaria Pão Nosso → Casa de Apoio Esperança): a janela termina em 25 min.
+-- Passada a tolerância do fim da janela, a primeira consulta de lotes devolve o lote às receptoras.
+-- Instantes relativos à criação do banco: em um banco antigo a reserva já terá sido liberada.
+WITH reserva AS (
+  INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, status, reservado_por, reservado_em,
+                     codigo, janela_inicio, janela_fim, criado_em)
+  VALUES (3, 'Bolos e roscas', 'Panificados', 6, (now() AT TIME ZONE 'America/Campo_Grande')::date + 1,
+          'reservado', 4, now() - interval '90 minutes', '482915',
+          now() - interval '90 minutes', now() + interval '25 minutes', now() - interval '3 hours')
+  RETURNING id
+), ev AS (
+  INSERT INTO eventos_lote (lote_id, tipo, usuario_id, criado_em)
+  SELECT id, 'publicado', 3, now() - interval '3 hours' FROM reserva
+  UNION ALL
+  SELECT id, 'reservado', 4, now() - interval '90 minutes' FROM reserva
+)
+INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem, criado_em)
+SELECT 3, id, 'lote_reservado', false, 'Casa de Apoio Esperança reservou o lote: Bolos e roscas.', now() - interval '90 minutes'
+  FROM reserva;

@@ -158,3 +158,11 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Schema: `notificacoes` em db/init.sql; bancos existentes exigem atualização controlada (nada migrado).
 - Conferência visual: feita parcialmente no navegador (Claude in Chrome): WS ao vivo, toast urgente, contador e central. **Conferência visual humana PENDENTE** para o restante do roteiro (checklist L05). Um ajuste de CSS posterior não foi reconferido.
 - Próximo passo: controlador repete testes e chama revisão separada de autorização por destinatário antes de integrar.
+## 28/10/2026 — L08-nucleo — implementação claude
+
+- Executor único, sem subagentes; branch `lote/L08-nucleo`. Modelo/esforço: `nao_verificado`. Sem commits/staging/.git/.agentes/VPS/publicação.
+- Seed em db/init.sql: 16 doações históricas de 30 dias (lotes 5–20, eventos, checklist, comprovante canônico v1 e SHA-256 gerados em SQL) e 1 reserva perto de expirar (lote 21, janela de 25 min, código 482915) com notificação. Sem fotos (L03 adiado). Lotes 1–4 preservados.
+- README atualizado (funcionalidades, Docker/local/testes, seed, rotas). Novo `backend/test/09-seed.test.mjs` (4 testes); nenhum teste anterior alterado.
+- `npm test` em backend/: **120 testes / 120 pass / 0 fail / 0 skipped / 0 todo / 0 cancelled**, código 0.
+- Conferência visual parcial pelo navegador (indicadores com números, reserva 482915 visível); **conferência visual humana PENDENTE** (roteiro no checklist L08-nucleo). Servidor manual encerrado.
+- Limitações: bancos existentes exigem recriação; instantes do seed são relativos à criação do banco. **L08 completo continua pendente** (roteiros, carga, fotos).
