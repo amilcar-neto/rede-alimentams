@@ -53,3 +53,27 @@
 - Resultado **blocked**: feedback e registros confirmam que a validação visual obrigatória permanece impedida pela negativa `Computer Use was not approved to use Microsoft Edge`. Nenhuma nova autorização ou evidência manual recebida; nenhum acesso ao navegador tentado nesta retomada.
 - Código e testes preservados. Última execução registrada (01:15): `npm.cmd test` em backend/, código 0, 65 aprovados / 0 fail / 0 todo / 0 skipped / 0 cancelled, 8394,1511 ms. Essa evidência é histórica; não houve nova execução da suíte, teste manual visual, print ou revisão independente nesta retomada.
 - Atualizados somente este log e o [checklist L01](progresso/L01.md). Próximo passo: controlador/grupo autorizar o acesso ou executar e registrar o roteiro visual no banco descartável; depois repetir testes e encaminhar revisão separada. Sem commits, staging, mudança de branch, integração ou alterações em .git/.agentes/controlador/plano/instruções/configurações; sem VPS, publicação ou mensagens externas. Consumo e duração total não medidos.
+
+## Manutenção autorizada — 28/10/2026 — transferência por ferramenta indisponível
+
+- Pedido explícito do usuário nesta conversa: ajustar o controlador fora da execução dos lotes; sem subagentes ou executor real iniciado.
+- Implementado `block_reason` no schema/prompt: none, tool_unavailable, permission_denied ou other. Respostas legadas continuam aceitas sem autorizar transferência.
+- Codex com ferramenta ausente/desconectada e evidência transfere uma vez por lote ao Claude, preservando progresso, fase e critérios de aceite. Histórico da transferência persiste; nenhuma cota é simulada. Claude limitado não recebe a tentativa.
+- Negativas de permissão, erros de CLI/login/banco e bloqueios legados continuam parando. A extensão Claude no Edge deve ter conexão e acesso autorizado verificados pelo executor; sua instalação não comprova funcionamento.
+- Testes reais: node --test scripts/agentes/core.test.mjs: 29 pass, 0 fail, 38070.5657 ms. Incluem transferência, preservação de trabalho, revisão/gate, negativas, ausência de evidência e persistência após retomada.
+- npm.cmd test em backend/ com ambiente fornecido por testEnvironment(loadConfig(...)): 65 pass, 0 fail/todo/skipped/cancelled, 7483.4158 ms, banco exclusivo alimentams_test recriado pelo runner. git diff --check sem erros (avisos LF/CRLF).
+- Limitação: nenhuma sessão real Claude/Edge nem teste visual nesta manutenção. Bloqueio L01 por negativa de acesso continua válido. Sem alteração manual de estado/runtime, permissões, branch ou commits no repositório real; fixtures dos testes usam repositórios descartáveis locais.
+- Próximo passo: providenciar acesso autorizado ao navegador ou evidência manual para L01. Não usar retomar repetidamente esperando que uma negativa seja reclassificada.
+
+## Complemento autorizado — retomada explícita pelo Claude
+
+- Corrigida a lacuna da manutenção anterior: operador pode executar agentes.cmd retomar --claude. O controlador seleciona Claude, preserva diagnóstico anterior e solicita verificação do próprio acesso autorizado à extensão. Não foi iniciado executor real nesta conversa.
+- Confirmado --chrome na ajuda da CLI nativa instalada; adaptador usa essa opção com claude.chrome=true. A integração real com Edge continua a verificar durante a execução, sem afirmar compatibilidade/conexão só pela extensão instalada.
+- Testes novos cobrem seleção explícita após negativa no Codex e recusa de opções inválidas. Primeira execução detectou inicialização antecipada da fila mesmo com estado salvo; corrigida leitura preguiçosa do fallback. Também corrigida fixture sem configuração. Reexecução direcionada: 2 pass / 0 fail. Suíte completa final registrada em docs/testes/controlador-retomada-claude.txt.
+- Próximo passo operacional: encerrar esta sessão de edição e o operador executar .\agentes.cmd retomar --claude. Claude verifica acesso próprio, faz o roteiro visual em banco descartável se autorizado e registra resultado; controlador mantém testes/revisão. Negativa do Claude também bloqueia.
+Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/skipped/cancelled, 40165.4468 ms, código 0. Backend: 65 aprovados na execução anterior desta manutenção; sem alterações no backend desde então.
+
+## L01 — retomada pelo Claude (28/10/2026)
+
+- Extensão do navegador conectada e responsiva (1 navegador local; Edge não confirmado pelo retorno). Servidor local de teste não iniciado: permissão negada para executar o servidor contra `alimentams_test`; negativa respeitada, sem alternativa. Roteiro visual não executado; sem prints; testes não reexecutados; sem revisão.
+- Próximo passo: autorizar a execução do servidor de teste na porta 3100 e retomar com --claude, ou registrar roteiro manual.

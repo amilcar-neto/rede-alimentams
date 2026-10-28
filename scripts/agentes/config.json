@@ -14,6 +14,7 @@
     "criticalEffort": "high"
   },
   "claude": {
+    "chrome": true,
     "command": "claude",
     "isolation": "native",
     "permissionMode": "bypassPermissions",

@@ -37,7 +37,7 @@ export function acquireLock(file) {
 }
 
 // Claude remains active until its own quota is exhausted. Only a quota response
-// changes providers; permission/auth/timeouts do not masquerade as quota.
+// changes quota state; explicit tool handoffs do not masquerade as quota.
 export class Scheduler {
   constructor(saved = {}) {
     this.provider = saved.provider ?? 'codex';
@@ -69,6 +69,8 @@ function jsonLines(text) {
 }
 function validReport(report) {
   return report && ['continue', 'ready', 'blocked'].includes(report.status)
+    && (report.block_reason === undefined || ['none', 'tool_unavailable', 'permission_denied', 'other'].includes(report.block_reason))
+    && (report.status === 'blocked' || !report.block_reason || report.block_reason === 'none')
     && typeof report.summary === 'string' && typeof report.next_step === 'string'
     && Array.isArray(report.evidence) && report.evidence.every(x => typeof x === 'string');
 }
@@ -147,6 +149,7 @@ export function providerCommand(provider, config, root, task, phase) {
   const args = ['-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages',
     '--model', model, '--effort', effort, '--json-schema', JSON.stringify(SCHEMA),
     '--permission-prompts', 'none'];
+  if (spec.chrome === true) args.push('--chrome');
   if (spec.permissionMode === 'bypassPermissions') args.push('--dangerously-skip-permissions');
   else args.push('--permission-mode', 'dontAsk');
   // Native mode is NOT a filesystem sandbox. bypassPermissions is an explicit

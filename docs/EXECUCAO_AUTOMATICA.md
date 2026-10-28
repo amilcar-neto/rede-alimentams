@@ -57,6 +57,30 @@ ele mantém a trava e exige verificação manual; não presume que a pasta está
 4. Se Codex continuar limitado, tenta Claude. Se ambos falharem por cota, repete
    a espera. Não há limite de ciclos de cota enquanto houver trabalho pendente.
 
+Exceção autorizada: se Codex retornar `blocked` com `block_reason: tool_unavailable`
+e evidência de ferramenta ausente ou desconectada, o controlador salva o trabalho
+e transfere a etapa pendente ao Claude uma única vez por lote. Claude verifica
+se possui acesso autorizado (inclusive conexão à extensão Claude no Edge), executa
+o roteiro restante e registra evidências. A extensão instalada não comprova conexão
+com a CLI. Testes e revisão continuam obrigatórios antes da integração.
+
+A transferência persiste entre retomadas, não marca cota esgotada e não ocorre
+se Claude já estiver limitado. Se Claude também não conseguir, o controlador para.
+Negativa de permissão (`permission_denied`), bloqueio antigo sem classificação,
+falta de evidência, banco, login e erros de CLI continuam bloqueando. Não
+reclassificar negativas históricas como ferramenta ausente para provocar a troca.
+Para solicitar explicitamente uma retomada pelo Claude com sua própria conexão
+autorizada à extensão, use `agentes.cmd retomar --claude`. O controlador registra
+a escolha, preserva o diagnóstico anterior e seleciona Claude sem simular cota.
+Isso não autoriza contornar negativas de acesso. Se Claude também receber uma
+negativa, a execução para. Não há aceite visual até o roteiro ser executado.
+
+O adaptador Claude habilita a integração da extensão com `--chrome`, confirmado
+no `--help` da CLI instalada. O nome dessa opção é da CLI; a compatibilidade e
+conexão com a extensão instalada no Edge precisam ser verificadas na execução.
+`claude.chrome: false` desativa a integração na configuração. O comando retomar
+deve ser executado pelo operador, com nenhum outro executor ativo.
+
 Claude não é interrompido para sondar Codex. Cada tentativa é uma execução real
 do trabalho pendente, sem chamadas extras de sondagem. Datas explícitas e
 estruturadas de renovação podem antecipar a próxima tentativa. Sem elas, o

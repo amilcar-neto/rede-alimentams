@@ -112,10 +112,16 @@ ready significa que todo o escopo desta etapa e seus critérios de aceite estão
 continue significa progresso parcial salvo; blocked significa impedimento que não se resolve sem intervenção.
 O L00 deve aproveitar AGENTS.md/CLAUDE.md existentes, sem reescrever regras ou controlador.
 Banco ausente, permissão negada ou dependência obrigatória faltante: informe blocked com diagnóstico.`}
+Informe block_reason: none sem bloqueio; tool_unavailable somente quando a ferramenta necessária
+não existe/não está conectada nesta CLI, com evidência concreta; permission_denied para qualquer
+negativa de acesso/permissão; other para banco, autenticação ou demais impedimentos.
+Não reclassifique uma negativa já registrada como indisponibilidade. No Claude, se precisar de
+navegador, verifique a conexão autorizada à extensão Claude no Edge; não presuma que está conectada.
+Retome o roteiro pendente e preserve as evidências válidas. Nunca contorne uma negativa de permissão.
 Não crie subagentes nem abra outros executores. Não altere controlador, fila, configurações, instruções,
 plano, documentos originais ou .agentes/. Não acesse VPS, não publique nem envie mensagens.
 Último retorno/feedback: ${task.feedback || 'nenhum; confira os arquivos e o Git.'}
-Responda no schema fornecido: status (continue/ready/blocked), summary, next_step e evidence (lista).
+Responda no schema fornecido: status (continue/ready/blocked), summary, next_step, evidence (lista) e block_reason.
 Não declare testes, prints, deploy ou revisão humana que não ocorreram.`;
 }
 
@@ -133,7 +139,11 @@ async function runTests(root, config, p, controls) {
 }
 
 export async function runController({ root = ROOT, config = loadConfig(root), queue,
-  execute, gate = runTests, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, resume = false } = {}) {
+  execute, gate = runTests, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, resume = false,
+  requestedProvider } = {}) {
+  if (requestedProvider !== undefined && (!resume || requestedProvider !== 'claude')) {
+    throw new Error('Seleção explícita suportada apenas em retomar --claude.');
+  }
   const p = paths(root); fs.mkdirSync(p.logs, { recursive: true });
   const lock = acquireLock(p.lock);
   let interrupted = false;
@@ -143,11 +153,18 @@ export async function runController({ root = ROOT, config = loadConfig(root), qu
   let state, scheduler;
   try {
     if (fs.existsSync(p.stop)) fs.unlinkSync(p.stop);
-    state = readJson(p.state, initialState(queue ?? readJson(path.join(root, 'scripts/agentes/fila.json'))));
+    state = readJson(p.state) ?? initialState(queue ?? readJson(path.join(root, 'scripts/agentes/fila.json')));
     scheduler = new Scheduler(state.scheduler);
     if (state.status === 'concluido') { console.log('Plano já concluído. Veja .agentes/estado.json e os relatórios.'); return; }
     if (state.status === 'bloqueado' && !resume) throw new Error('Execução bloqueada: corrija o motivo e use agentes.cmd retomar.');
     setupGit(root, state);
+    if (requestedProvider) {
+      scheduler.provider = requestedProvider;
+      scheduler.waitUntil = null;
+      const task = state.queue[state.current];
+      if (task) task.feedback = `${task.feedback || ''}\nO usuário solicitou explicitamente retomar pelo Claude. Verifique a conexão própria autorizada com a extensão do navegador e execute o roteiro pendente. A negativa anterior do Codex permanece registrada; não altere permissões nem contorne negativas. Se sua conexão também for negada ou indisponível, informe blocked com o diagnóstico.`;
+      logEvent(p, 'provider-request', 'Retomada pelo Claude solicitada explicitamente pelo usuário; verificar acesso próprio autorizado.');
+    }
     state.status = 'executando'; save(p, state, scheduler);
     logEvent(p, 'start', `Controlador iniciado. Preferência atual: ${scheduler.provider}.`);
     let nextHeartbeat = Date.now() + config.heartbeatMinutes * MINUTE;
@@ -212,7 +229,18 @@ export async function runController({ root = ROOT, config = loadConfig(root), qu
       const report = outcome.report;
       task.feedback = `${report.summary}\nPróximo passo: ${report.next_step}`;
       logEvent(p, 'response', `${task.id}: ${report.summary}`, { status: report.status });
-      if (report.status === 'blocked') throw new Error(task.feedback);
+      if (report.status === 'blocked') {
+        if (provider === 'codex' && report.block_reason === 'tool_unavailable'
+          && report.evidence.length && !task.toolHandoff && !scheduler.limited.claude) {
+          task.toolHandoff = { from: provider, to: 'claude', at: iso(), reason: report.summary,
+            evidence: report.evidence };
+          scheduler.provider = 'claude';
+          task.feedback += '\nTransferência única por ferramenta indisponível. Verifique seu acesso autorizado, retome o roteiro pendente e registre evidências; se não conseguir, informe blocked. Não contorne negativas de permissão.';
+          logEvent(p, 'tool-handoff', `${task.id}: ferramenta indisponível no Codex; Claude tentará a etapa pendente uma vez.`);
+          save(p, state, scheduler); continue;
+        }
+        throw new Error(task.feedback);
+      }
       if (report.status === 'continue' && fingerprint(root, true) === before) task.noProgress++;
       else task.noProgress = 0;
       if (task.noProgress >= config.maxNoProgress) throw new Error('Chamadas repetidas sem alterações verificáveis; interrompendo para evitar consumo indefinido.');
@@ -325,6 +353,10 @@ async function main() {
     process.exitCode = result.status ?? 1; return;
   }
   if (!['iniciar', 'retomar'].includes(command)) throw new Error('Comandos: banco, iniciar, retomar, status, parar, diagnostico, testar.');
-  await runController({ resume: command === 'retomar' });
+  const options = process.argv.slice(3);
+  if (options.some(option => option !== '--claude') || (options.length && command !== 'retomar')) {
+    throw new Error('Opção suportada: agentes.cmd retomar --claude.');
+  }
+  await runController({ resume: command === 'retomar', requestedProvider: options.includes('--claude') ? 'claude' : undefined });
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });
