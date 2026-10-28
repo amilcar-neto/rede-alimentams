@@ -6,6 +6,7 @@
   "maxNoProgress": 3,
   "maxFixRounds": 2,
   "testTimeoutMinutes": 15,
+  "neverStop": true,
   "testDatabaseUrl": "postgres://alimentams_test:alimentams_test_local@127.0.0.1:5433/alimentams_test",
   "codex": {
     "command": "codex",
@@ -18,6 +19,9 @@
     "command": "claude",
     "isolation": "native",
     "permissionMode": "bypassPermissions",
+    "settingSources": "user",
+    "disallowedTools": ["Bash(git push *)", "Bash(git remote *)", "Bash(ssh *)", "Bash(scp *)",
+      "PowerShell(git push *)", "PowerShell(git remote *)", "PowerShell(ssh *)", "PowerShell(scp *)"],
     "model": "sonnet",
     "reviewModel": "opus",
     "effort": "medium",

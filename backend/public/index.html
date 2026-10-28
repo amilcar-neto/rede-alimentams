@@ -192,7 +192,9 @@ function sair() {
   localStorage.removeItem('token'); localStorage.removeItem('usuario');
   $('telaApp').classList.add('oculto'); $('sessao').classList.add('oculto');
   $('telaAuth').classList.remove('oculto');
-  msg('erroLogin', '');
+  msg('erroLogin', ''); msg('erroCadastro', '');
+  $('cSenha').value = '';
+  trocar(false);
 }
 
 // ---------- Aplicação ----------

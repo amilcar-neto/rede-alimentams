@@ -28,7 +28,8 @@ function fixture(t) {
   });
   return root;
 }
-function config() { return { ...loadConfig(ROOT), retryMinutes: 1, heartbeatMinutes: 1 }; }
+// Existing tests cover the strict mode; never-stop has dedicated tests below.
+function config() { return { ...loadConfig(ROOT), retryMinutes: 1, heartbeatMinutes: 1, neverStop: false }; }
 const queue = [{ id: 'T00', section: 'T00', scope: 'fixture', critical: false }];
 
 test('CLIs e testes recebem a conexão isolada, sem herdar banco de desenvolvimento', () => {
@@ -75,7 +76,48 @@ test('429 de rede, login, timeout e permissões não são classificados como cot
     assert.equal(classify('codex', { code: 1, stdout: '', stderr }).kind, 'error');
   }
   assert.equal(classify('codex', { ...response('codex'), timedOut: true }).kind, 'error');
-  assert.equal(classify('claude', { code: 0, stdout: JSON.stringify({ type: 'result', permission_denials: [{ tool_name: 'Bash' }], structured_output: report() }) }).kind, 'error');
+  assert.equal(classify('claude', { code: 0, stdout: JSON.stringify({ type: 'result', permission_denials: [{ tool_name: 'Bash' }], structured_output: { ...report('blocked'), block_reason: 'permission_denied' } }) }).kind, 'error');
+});
+test('negativa contornada pelo Claude com etapa concluída segue para testes', () => {
+  const outcome = classify('claude', { code: 0, stdout: JSON.stringify({ type: 'result', permission_denials: [{ tool_name: 'Bash' }], structured_output: report() }) });
+  assert.equal(outcome.kind, 'success');
+  assert.equal(outcome.permissionDenials, 1);
+});
+test('modo sem parada: Codex bloqueado sai e Claude conclui; erro do Claude espera e repete', async t => {
+  const root = fixture(t), seen = []; let clock = Date.now(), claudeCalls = 0;
+  await runController({ root, config: { ...config(), neverStop: true }, queue,
+    execute: async ({ provider }) => {
+      seen.push(provider);
+      if (provider === 'codex') return response(provider, 'blocked', { block_reason: 'other' });
+      claudeCalls++;
+      return claudeCalls === 1 ? { code: 1, stdout: '', stderr: 'falha momentânea' } : response(provider);
+    },
+    now: () => clock, sleep: async ms => { clock += ms; },
+    gate: async () => ({ code: 0, stdout: 'OK', stderr: '' }) });
+  const state = readJson(path.join(root, '.agentes/estado.json'));
+  assert.deepEqual(seen, ['codex', 'claude', 'claude']);
+  assert.equal(state.status, 'concluido');
+  assert.equal(state.scheduler.codexOff, false); // reset once the lot is integrated
+});
+test('modo sem parada: Claude limitado passa ao Codex; se Codex também limitar, espera renovação do Claude', () => {
+  const s = new Scheduler({ provider: 'claude', codexOff: true });
+  assert.equal(s.quota(new Date(20 * MINUTE).toISOString(), 0, 60 * MINUTE), 'switch');
+  assert.equal(s.provider, 'codex');
+  assert.equal(s.quota(null, 0, 60 * MINUTE), 'wait');
+  assert.equal(Date.parse(s.waitUntil), 20 * MINUTE);
+  s.newCycle(); assert.equal(s.provider, 'claude');
+});
+test('modo sem parada: Codex desativado volta a ser opção no lote seguinte', async t => {
+  const root = fixture(t), seen = [];
+  await runController({ root, config: { ...config(), neverStop: true },
+    queue: [queue[0], { id: 'T01', section: 'T01', scope: 'fixture', critical: false }],
+    execute: async ({ provider, task }) => {
+      seen.push(`${provider}:${task.id}`);
+      if (provider === 'codex' && task.id === 'T00') return response(provider, 'blocked', { block_reason: 'other' });
+      if (provider === 'claude' && task.id === 'T01') return quota();
+      return response(provider);
+    }, gate: async () => ({ code: 0, stdout: 'OK', stderr: '' }) });
+  assert.deepEqual(seen, ['codex:T00', 'claude:T00', 'claude:T01', 'codex:T01']);
 });
 test('menção a limite no conteúdo normal não esgota a ferramenta', () => {
   const r = report(); r.summary = "Documentação: You've hit your usage limit";
@@ -170,8 +212,16 @@ test('ferramenta indisponível transfere trabalho salvo ao Claude e mantém gate
   assert.equal(state.queue[0].toolHandoff.to, 'claude');
 });
 
-test('negativa, bloqueio legado e indisponibilidade sem evidência não transferem', async t => {
-  for (const extra of [{ block_reason: 'permission_denied' }, { block_reason: undefined },
+test('negativa no Codex transfere uma vez ao Claude', async t => {
+  const root = fixture(t), seen = [];
+  await runController({ root, config: config(), queue,
+    execute: async ({ provider }) => { seen.push(provider);
+      return provider === 'codex' ? response(provider, 'blocked', { block_reason: 'permission_denied' }) : response(provider); },
+    gate: async () => ({ code: 0, stdout: 'OK', stderr: '' }) });
+  assert.deepEqual(seen, ['codex', 'claude']);
+});
+test('bloqueio legado e indisponibilidade sem evidência não transferem', async t => {
+  for (const extra of [{ block_reason: undefined },
     { block_reason: 'other' }, { block_reason: 'tool_unavailable', evidence: [] }]) {
     const root = fixture(t), seen = [];
     await assert.rejects(runController({ root, config: config(), queue,

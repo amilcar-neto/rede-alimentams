@@ -49,6 +49,23 @@ e o histórico de arquivos são compartilhados; conversas e limites não são.
 antes de abrir outra execução. Se a árvore de processos não puder ser encerrada,
 ele mantém a trava e exige verificação manual; não presume que a pasta está livre.
 
+## Modo sem parada (`neverStop: true`, padrão desde 28/10/2026)
+
+Pedido do usuário para rodar a noite sem intervenção:
+- Codex bloqueado, com erro de CLI ou recusa: o Codex é desativado nesta execução
+  (`scheduler.codexOff` em `.agentes/estado.json`) e o Claude segue sozinho.
+- Claude bloqueado ou com erro: espera `retryMinutes` e tenta de novo a mesma etapa, com o motivo
+  no feedback. Cota do Claude: espera a renovação informada (ou 60 min) e volta ao Claude.
+- Conferência visual impossível vira "Conferência visual humana PENDENTE" no checklist, sem
+  bloquear o lote. Nunca é declarada como feita.
+- O Claude usa `--setting-sources user`: as negações de `.claude/settings.json` (curl, wget etc.)
+  não se aplicam a ele. Continuam proibidos `git push`, `git remote`, `ssh` e `scp` (`claude.disallowedTools`).
+- Uma negação que o Claude contorna e que termina a etapa não derruba mais a execução (evento `permission-denials`).
+- Continuam parando: arquivo protegido alterado, troca de branch, revisor editando código,
+  processos que não encerram e conflito de merge.
+- Para voltar ao modo antigo: `"neverStop": false` em `.agentes/config.local.json`. Para reativar o
+  Codex, ajuste `codexOff` com o controlador parado.
+
 ## Hierarquia e relógio
 
 1. Codex executa as etapas até informar cota esgotada.
