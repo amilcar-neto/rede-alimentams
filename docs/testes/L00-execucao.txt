@@ -1,0 +1,319 @@
+
+> rede-alimentams@1.0.0 test
+> node test/run.mjs
+
+Banco de teste recriado e db/init.sql carregado: alimentams_test
+Rede AlimentaMS rodando em http://localhost:3100
+error: date/time field value out of range: "2026-02-31"
+    at C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Users\groun\Downloads\rede-alimentams\backend\src\server.js:135:14 {
+  length: 151,
+  severity: 'ERROR',
+  code: '22008',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: "unnamed portal parameter $1 = '...'",
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'datetime.c',
+  line: '3985',
+  routine: 'DateTimeParseError'
+}
+TypeError: alimento.trim is not a function
+    at C:\Users\groun\Downloads\rede-alimentams\backend\src\server.js:141:31
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+error: numeric field overflow
+    at C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Users\groun\Downloads\rede-alimentams\backend\src\server.js:138:13 {
+  length: 165,
+  severity: 'ERROR',
+  code: '22003',
+  detail: 'A field with precision 10, scale 2 must round to an absolute value less than 10^8.',
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: undefined,
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'numeric.c',
+  line: '7909',
+  routine: 'apply_typmod'
+}
+Error: Illegal arguments: number, number
+    at _async (C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\bcryptjs\dist\bcrypt.js:214:46)
+    at C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\bcryptjs\dist\bcrypt.js:223:17
+    at new Promise (<anonymous>)
+    at bcrypt.hash (C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\bcryptjs\dist\bcrypt.js:222:20)
+    at C:\Users\groun\Downloads\rede-alimentams\backend\src\server.js:69:29
+    at C:\Users\groun\Downloads\rede-alimentams\backend\src\server.js:33:3
+    at Layer.handle [as handle_request] (C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\express\lib\router\layer.js:95:5)
+    at next (C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\express\lib\router\route.js:149:13)
+    at Route.dispatch (C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\express\lib\router\route.js:119:3)
+    at Layer.handle [as handle_request] (C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\express\lib\router\layer.js:95:5)
+error: invalid input syntax for type integer: "abc"
+    at C:\Users\groun\Downloads\rede-alimentams\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async C:\Users\groun\Downloads\rede-alimentams\backend\src\server.js:150:13 {
+  length: 146,
+  severity: 'ERROR',
+  code: '22P02',
+  detail: undefined,
+  hint: undefined,
+  position: undefined,
+  internalPosition: undefined,
+  internalQuery: undefined,
+  where: "unnamed portal parameter $1 = '...'",
+  schema: undefined,
+  table: undefined,
+  column: undefined,
+  dataType: undefined,
+  constraint: undefined,
+  file: 'numutils.c',
+  line: '617',
+  routine: 'pg_strtoint32_safe'
+}
+✔ Reset recusa nomes/URLs não autorizados antes de conectar e preserva dados (48.7134ms)
+✔ Servidor filho e cliente pg usam o mesmo banco de teste (56.8028ms)
+✔ Falha nova e mudança de assinatura conhecida retornam código não zero (378.7517ms)
+✔ Login das 5 contas demo (0.1968ms)
+✔ Login senha errada -> 401 (0.1277ms)
+✔ Sem token -> 401 (0.1131ms)
+✔ Token inválido -> 401 (0.1186ms)
+✔ C1 publicar lote 50kg (0.1096ms)
+✔ C1 lote visível p/ ONG Monte Castelo (0.129ms)
+✔ C1 lote visível p/ ONG Amambai (0.1695ms)
+✔ C1 ordenação validade -> distância (0.1164ms)
+✔ Receptora longe (fora 10km) não vê lotes (0.0832ms)
+✔ Receptora longe não consegue reservar (0.0766ms)
+✔ Doador não pode reservar (RBAC) (0.0857ms)
+✔ Receptora não pode publicar (RBAC) (0.09ms)
+✔ C1 reservar gera código 6 dígitos (0.0788ms)
+✔ Segunda ONG não reserva lote já reservado (0.08ms)
+✔ ONG que não reservou não vê o código (0.067ms)
+✔ Outro doador não confirma lote alheio (0.0648ms)
+✔ Código errado rejeitado (0.0648ms)
+✔ C1 confirmar retirada c/ código (0.0713ms)
+✔ Confirmar 2x não duplica (0.0732ms)
+✔ C1 doação registrada (comprovante/log) (0.0712ms)
+✔ C1 doação aparece p/ receptora (0.0638ms)
+✔ C1 indicadores atualizados (+50kg) (0.0621ms)
+✔ C2 qtd 0 -> 400 (0.0621ms)
+✔ C2 qtd negativa -> 400 (0.0705ms)
+✔ C2 qtd texto -> 400 (0.0613ms)
+✔ C2 qtd vazia -> 400 (0.0882ms)
+✔ C2 validade ontem -> 400 (0.0788ms)
+⚠ C2 validade inválida -> 400 (0.8236ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+✔ C2 validade formato BR -> 400 (0.0828ms)
+✔ C2 sem alimento -> 400 (0.0768ms)
+✔ C2 validade hoje (permitido) -> 201 (0.0778ms)
+⚠ C2 alimento numérico (tipo errado) -> 400 (0.1841ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+⚠ C2 categoria arbitrária -> 400 (0.1897ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+⚠ C2 qtd absurda 1e12 -> 400 (0.1552ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+⚠ C2 alimento só espaços -> 400 (0.1602ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+✔ Cadastro receptora ok (0.0718ms)
+✔ Cadastro e-mail duplicado -> 409 (0.0656ms)
+✔ Cadastro senha curta -> 400 (0.065ms)
+✔ Cadastro perfil inválido -> 400 (0.0719ms)
+⚠ Cadastro CNPJ inválido rejeitado (Fluxo 1) (0.1531ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+⚠ Cadastro e-mail inválido rejeitado (0.1753ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+⚠ Cadastro senha numérica (tipo) não dá 500 (0.1659ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+⚠ reservar id não numérico não dá 500 (0.185ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+✔ login body vazio não dá 500 (0.0788ms)
+✔ C3 20 req simultâneas sem erro 5xx (0.0722ms)
+✔ C3 apenas 1 reserva vence a corrida (0.0642ms)
+✔ Extra: 200 GET /lotes simultâneos (0.0624ms)
+✔ Indicadores são globais (não por doador) (0.0702ms)
+ℹ tests 51
+ℹ suites 0
+ℹ pass 42
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 9
+ℹ duration_ms 2318.2407
+
+✖ failing tests:
+
+test at test\helpers.mjs:49:10
+⚠ C2 validade inválida -> 400 (0.8236ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=500 {"erro":"Erro interno do servidor."}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ C2 alimento numérico (tipo errado) -> 400 (0.1841ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=500 {"erro":"Erro interno do servidor."}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ C2 categoria arbitrária -> 400 (0.1897ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=201 {"id":7}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ C2 qtd absurda 1e12 -> 400 (0.1552ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=500 {"erro":"Erro interno do servidor."}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ C2 alimento só espaços -> 400 (0.1602ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=201 {"id":8}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ Cadastro CNPJ inválido rejeitado (Fluxo 1) (0.1531ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=201
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ Cadastro e-mail inválido rejeitado (0.1753ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=201
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ Cadastro senha numérica (tipo) não dá 500 (0.1659ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=500 {"erro":"Erro interno do servidor."}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at test\helpers.mjs:49:10
+⚠ reservar id não numérico não dá 500 (0.185ms) # L01: falha conhecida reproduzida; docs/testes/PENDENCIAS_L01.md
+  AssertionError [ERR_ASSERTION]: status=500 {"erro":"Erro interno do servidor."}
+      at TestContext.<anonymous> (file:///C:/Users/usuario/Downloads/rede-alimentams/backend/test/helpers.mjs:49:44)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+EXIT=0
