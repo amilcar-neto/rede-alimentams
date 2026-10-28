@@ -73,6 +73,19 @@
   .vazio { text-align: center; color: var(--suave); padding: 30px; background: var(--card); border-radius: 10px; }
   .linha2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 520px) { .linha2 { grid-template-columns: 1fr; } }
+  .sino { position: relative; padding: 6px 10px; }
+  .badge { position: absolute; top: -6px; right: -6px; min-width: 20px; padding: 1px 5px; border-radius: 10px; background: var(--verm); color: #fff; font-size: .75rem; font-weight: 700; text-align: center; }
+  .central { position: fixed; top: 64px; right: 12px; width: min(380px, calc(100vw - 24px)); max-height: 70vh; overflow: hidden auto; overflow-wrap: anywhere; z-index: 10; background: var(--card); color: var(--texto); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 12px; }
+  .central h2 { margin: 0 0 8px; font-size: 1rem; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .central h2 button { font-size: .8rem; padding: 4px 8px; }
+  .notif { border: 1px solid var(--borda); border-left: 4px solid var(--borda); border-radius: 6px; padding: 8px 10px; margin: 8px 0; font-size: .9rem; }
+  .notif.nova { border-left-color: var(--azul); background: #f3f8fe; }
+  .notif.urgente { border-left-color: var(--verm); }
+  .notif small { display: block; color: var(--suave); margin-top: 4px; }
+  .notif button { font-size: .78rem; padding: 3px 8px; margin-left: 6px; }
+  .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 11; max-width: min(480px, calc(100vw - 24px)); background: #263238; color: #fff; border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 16px rgba(0,0,0,.3); font-size: .92rem; }
+  .toast.urgente { background: var(--verm); }
+  .toast button { margin-left: 8px; padding: 3px 8px; font-size: .8rem; background: #fff; color: var(--texto); }
   .oculto { display: none !important; }
 </style>
 </head>
@@ -81,10 +94,13 @@
 <header>
   <div><h1>Rede AlimentaMS</h1><small>Campo Grande - MS</small></div>
   <div class="sessao oculto" id="sessao">
+    <button class="sec sino" id="sino" onclick="alternarCentral()" aria-label="Notificações" aria-expanded="false" aria-controls="central">&#128276;<span class="badge oculto" id="contador">0</span></button>
     <span id="quem"></span>
     <button class="sec" onclick="sair()">Sair</button>
   </div>
 </header>
+<section class="central oculto" id="central" aria-label="Central de notificações"></section>
+<div class="toast oculto" id="toast" role="status" aria-live="polite"></div>
 
 <main>
   <!-- LOGIN / CADASTRO -->
@@ -215,6 +231,7 @@ function iniciarSessao(d) {
 function sair() {
   token = null; usuario = null;
   localStorage.removeItem('token'); localStorage.removeItem('usuario');
+  pararTempoReal();
   $('telaApp').classList.add('oculto'); $('sessao').classList.add('oculto');
   $('telaAuth').classList.remove('oculto');
   msg('erroLogin', ''); msg('erroCadastro', '');
@@ -228,6 +245,7 @@ function mostrarApp() {
   $('telaApp').classList.remove('oculto');
   $('sessao').classList.remove('oculto');
   $('quem').textContent = `${usuario.nome} (${usuario.perfil === 'doador' ? 'Doador' : 'Entidade receptora'})`;
+  iniciarTempoReal();
   const abas = usuario.perfil === 'doador'
     ? [['lotes', 'Meus lotes'], ['publicar', 'Publicar lote'], ['doacoes', 'Doações registradas']]
     : [['lotes', 'Lotes disponíveis'], ['doacoes', 'Doações recebidas']];
@@ -239,6 +257,7 @@ async function irPara(aba) {
   abaAtual = aba;
   document.querySelectorAll('#abas button').forEach((b) => b.classList.toggle('ativa', b.dataset.aba === aba));
   carregarIndicadores();
+  carregarNotificacoes();
   try {
     if (aba === 'lotes') await telaLotes();
     else if (aba === 'publicar') telaPublicar();
@@ -442,6 +461,133 @@ async function abrirComprovante(id) {
     if (janela) janela.close();
     const destino = $('erroComprovante') || $('aviso') || $('erroLogin');
     msg(destino.id, e.message);
+  }
+}
+
+// ---------- Notificações e tempo real ----------
+// O sino e a central funcionam só com HTTP; o WebSocket apenas antecipa o aviso e a recarga.
+let notificacoes = [], naoLidas = 0, central = false;
+let ws = null, tentativasWs = 0, esperaWs = null, avisoWs = null;
+
+function renderSino() {
+  const c = $('contador');
+  c.textContent = naoLidas > 99 ? '99+' : String(naoLidas);
+  c.classList.toggle('oculto', naoLidas === 0);
+  $('sino').setAttribute('aria-label', naoLidas ? `Notificações: ${naoLidas} não lidas` : 'Notificações');
+  if (central) renderCentral();
+}
+
+function renderCentral() {
+  const quando = (iso) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Campo_Grande', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const itens = notificacoes.map((n) => `<div class="notif ${n.lida ? '' : 'nova'} ${n.urgente ? 'urgente' : ''}">
+      ${n.urgente ? '<span class="tag t-hoje">urgente</span> ' : ''}${esc(n.mensagem)}
+      <small>${esc(quando(n.criado_em))}${n.lida ? '' : `<button onclick="marcarLida(${Number(n.id)})">Marcar como lida</button>`}</small></div>`).join('');
+  $('central').innerHTML = `<h2>Notificações<button onclick="marcarTodasLidas()" ${naoLidas ? '' : 'disabled'}>Marcar todas como lidas</button></h2>` +
+    (itens || '<div class="vazio">Nenhuma notificação por enquanto.</div>');
+}
+
+async function carregarNotificacoes() {
+  if (!token) return;
+  try {
+    const d = await api('GET', '/notificacoes');
+    notificacoes = d.itens; naoLidas = d.nao_lidas;
+    renderSino();
+  } catch {}
+}
+
+function alternarCentral() {
+  central = !central;
+  $('central').classList.toggle('oculto', !central);
+  $('sino').setAttribute('aria-expanded', String(central));
+  if (central) { renderCentral(); carregarNotificacoes(); }
+}
+
+async function marcarLida(id) {
+  try {
+    await api('PUT', `/notificacoes/${id}/lida`);
+    const n = notificacoes.find((x) => x.id === id);
+    if (n && !n.lida) { n.lida = true; naoLidas = Math.max(0, naoLidas - 1); }
+    renderSino();
+  } catch {}
+}
+
+async function marcarTodasLidas() {
+  try {
+    await api('PUT', '/notificacoes/lidas');
+    notificacoes.forEach((n) => { n.lida = true; });
+    naoLidas = 0;
+    renderSino();
+  } catch {}
+}
+
+function mostrarAviso(texto, urgente, acao) {
+  const t = $('toast');
+  t.className = `toast ${urgente ? 'urgente' : ''}`;
+  t.innerHTML = esc(texto) + (acao ? ` <button onclick="irPara('lotes')">${esc(acao)}</button>` : '');
+  clearTimeout(avisoWs);
+  avisoWs = setTimeout(() => t.classList.add('oculto'), 8000);
+}
+
+// Recarrega a lista sem apagar um formulário aberto ou um campo em edição.
+function recarregarLista() {
+  if (!usuario || abaAtual !== 'lotes') return false;
+  if (document.querySelector('#conteudo .janela') || document.activeElement?.closest?.('#conteudo')) return false;
+  telaLotes().catch(() => {});
+  return true;
+}
+
+function receberNotificacao(n) {
+  if (!n || typeof n.tipo !== 'string' || !Number.isInteger(n.id) || typeof n.mensagem !== 'string') return;
+  if (!notificacoes.some((x) => x.id === n.id)) {
+    notificacoes.unshift(n); naoLidas += 1;
+    renderSino();
+  }
+  const atualizada = recarregarLista();
+  mostrarAviso(n.mensagem, n.urgente, atualizada ? null : 'Atualizar lista');
+}
+
+function iniciarTempoReal() {
+  fecharConexao();
+  if (!token || typeof WebSocket === 'undefined') return;
+  const credencial = token;
+  const conexao = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
+  ws = conexao;
+  conexao.onopen = () => conexao.send(credencial); // o JWT vai no primeiro frame, nunca na URL
+  conexao.onmessage = (ev) => {
+    let m;
+    try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.tipo === 'autenticado') {
+      const reconectou = tentativasWs > 0;
+      tentativasWs = 0;
+      if (reconectou) { carregarNotificacoes(); recarregarLista(); }
+      return;
+    }
+    receberNotificacao(m);
+  };
+  conexao.onclose = (ev) => {
+    if (ws !== conexao) return;
+    ws = null;
+    // Token recusado/expirado: a consulta HTTP decide se a sessão acabou (401 → sair).
+    if (ev.code === 1008) carregarNotificacoes();
+    if (!token) return;
+    esperaWs = setTimeout(iniciarTempoReal, Math.min(30000, 1000 * 2 ** tentativasWs));
+    tentativasWs += 1;
+  };
+  conexao.onerror = () => {};
+}
+
+function fecharConexao() {
+  clearTimeout(esperaWs);
+  const conexao = ws; ws = null;
+  if (conexao) { conexao.onclose = null; try { conexao.close(); } catch {} }
+}
+
+function pararTempoReal() {
+  fecharConexao(); clearTimeout(avisoWs); tentativasWs = 0;
+  notificacoes = []; naoLidas = 0; central = false;
+  if (typeof document !== 'undefined') {
+    $('central').classList.add('oculto'); $('toast').classList.add('oculto');
+    $('sino').setAttribute('aria-expanded', 'false'); renderSino();
   }
 }
 

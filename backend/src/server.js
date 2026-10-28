@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const validar = require('./validacao');
 const comprovantes = require('./comprovante');
+const { criarTempoReal, COLUNAS: COLUNAS_NOTIFICACAO } = require('./tempo-real');
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET?.trim()) {
   throw new Error('JWT_SECRET é obrigatório em produção.');
@@ -29,6 +30,8 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 pool.on('error', (erro) => console.error('Erro inesperado em conexão ociosa do banco.', erro));
+const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento';
+const tempoReal = criarTempoReal({ segredo: SEGREDO, log: (...args) => console.error(...args) });
 
 // Saúde (pública, dados mínimos): usada pelo healthcheck do Docker e pelo grupo no VPS.
 app.get('/saude', async (req, res) => {
@@ -40,7 +43,6 @@ app.get('/saude', async (req, res) => {
     res.status(503).json({ ok: false, banco: false });
   }
 });
-const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento';
 const RAIO_METROS = 10000; // Fluxo 3: entidades num raio de até 10 km
 const FUSO = "'America/Campo_Grande'";
 const HOJE = `(now() AT TIME ZONE ${FUSO})::date`;
@@ -135,6 +137,21 @@ app.post('/auth/login', rota(async (req, res) => {
   res.json({ token: gerarToken(u), usuario: { id: u.id, nome: u.nome, perfil: u.perfil } });
 }));
 
+// ---------- Notificações (L05) ----------
+// O destinatário é escolhido no servidor, em SQL, na mesma instrução que muda o lote.
+// Receptoras: apenas as do raio de 10 km do doador; urgente quando a validade é de hoje ou amanhã.
+const NOTIFICACOES_JSON = "(SELECT COALESCE(json_agg(x), '[]'::json) FROM notificadas x)";
+const notificarReceptoras = (tipo, origem, titulo, raio) =>
+  `notificadas AS (
+       INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem)
+       SELECT r.id, o.id, '${tipo}', (o.validade - ${HOJE}) <= 1,
+              '${titulo}: ' || o.alimento || ' (' || o.quantidade_kg::float8::text || ' kg) de ' || d.nome || '.'
+         FROM ${origem} o
+         JOIN usuarios d ON d.id = o.doador_id
+         JOIN usuarios r ON r.perfil = 'receptora' AND ST_DWithin(d.localizacao, r.localizacao, ${raio})
+       RETURNING ${COLUNAS_NOTIFICACAO}
+     )`;
+
 // ---------- Ciclo de vida (sem job: chamado no início das rotas de lotes) ----------
 // Cada passo é uma única instrução atômica; FOR UPDATE ordenado evita corrida e deadlock
 // entre chamadas simultâneas (a segunda reavalia as linhas já atualizadas e as ignora).
@@ -151,8 +168,9 @@ async function atualizarStatus() {
      )
      INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'expirado', NULL FROM expirados`
   );
-  // Janela encerrada há mais que a tolerância sem retirada → volta a disponível para a próxima ONG.
-  await pool.query(
+  // Janela encerrada há mais que a tolerância sem retirada → volta a disponível para a próxima ONG
+  // e avisa as receptoras no raio (a notificação nasce na mesma instrução da liberação).
+  const liberacao = await pool.query(
     `WITH atrasados AS (
        SELECT id, reservado_por FROM lotes
         WHERE status = 'reservado' AND janela_fim + make_interval(mins => $1) < now()
@@ -161,11 +179,15 @@ async function atualizarStatus() {
        UPDATE lotes l
           SET status = 'disponivel', reservado_por = NULL, reservado_em = NULL, codigo = NULL,
               janela_inicio = NULL, janela_fim = NULL
-         FROM atrasados a WHERE l.id = a.id RETURNING l.id, a.reservado_por
-     )
-     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'liberado', reservado_por FROM liberados`,
-    [TOLERANCIA_MINUTOS]
+         FROM atrasados a WHERE l.id = a.id
+       RETURNING l.id, l.doador_id, l.alimento, l.quantidade_kg, l.validade, a.reservado_por
+     ), evento AS (
+       INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'liberado', reservado_por FROM liberados
+     ), ${notificarReceptoras('lote_liberado', 'liberados', 'Lote disponível novamente', '$2')}
+     SELECT ${NOTIFICACOES_JSON} AS notificacoes`,
+    [TOLERANCIA_MINUTOS, RAIO_METROS]
   );
+  tempoReal.publicar(liberacao.rows[0]?.notificacoes);
 }
 
 // ---------- Lotes ----------
@@ -220,14 +242,15 @@ app.post('/lotes', autenticar, exigirPerfil('doador'), rota(async (req, res) => 
   const r = await pool.query(
     `WITH novo AS (
        INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id
+       VALUES ($1,$2,$3,$4,$5) RETURNING id, doador_id, alimento, quantidade_kg, validade
      ), evento AS (
        INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'publicado', $1 FROM novo
-     )
-     SELECT id FROM novo`,
-    [req.usuario.id, alimento, categoria, qtd, validade]
+     ), ${notificarReceptoras('lote_publicado', 'novo', 'Novo lote', '$6')}
+     SELECT id, ${NOTIFICACOES_JSON} AS notificacoes FROM novo`,
+    [req.usuario.id, alimento, categoria, qtd, validade, RAIO_METROS]
   );
   res.status(201).json({ id: r.rows[0].id });
+  tempoReal.publicar(r.rows[0].notificacoes);
 }));
 
 // Reservar (somente receptora), escolhendo a janela de retirada (horário de Campo Grande):
@@ -275,16 +298,22 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
           AND EXISTS (SELECT 1 FROM usuarios d, usuarios r
                        WHERE d.id = l.doador_id AND r.id = $2
                          AND ST_DWithin(d.localizacao, r.localizacao, $4))
-        RETURNING l.id, l.codigo
+        RETURNING l.id, l.codigo, l.doador_id, l.alimento
      ), evento AS (
        INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'reservado', $2 FROM reserva
+     ), notificadas AS (
+       INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem)
+       SELECT o.doador_id, o.id, 'lote_reservado', false, u.nome || ' reservou o lote: ' || o.alimento || '.'
+         FROM reserva o JOIN usuarios u ON u.id = $2
+       RETURNING ${COLUNAS_NOTIFICACAO}
      )
-     SELECT id, codigo FROM reserva`,
+     SELECT id, codigo, ${NOTIFICACOES_JSON} AS notificacoes FROM reserva`,
     [id, req.usuario.id, codigo, RAIO_METROS, lote.inicio, lote.fim]
   );
   if (!r.rows.length)
     return res.status(409).json({ erro: 'Este lote não está mais disponível para reserva.' });
   res.json({ id: r.rows[0].id, codigo: r.rows[0].codigo });
+  tempoReal.publicar(r.rows[0].notificacoes);
 }));
 
 // Confirmar retirada (somente doador): valida o código e registra a doação.
@@ -336,8 +365,15 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
       `INSERT INTO eventos_lote (lote_id, tipo, usuario_id) VALUES ($1,'entregue',$2)`,
       [l.id, l.doador_id]
     );
+    // Somente a receptora que reservou; o texto não leva o código de retirada.
+    const aviso = await client.query(
+      `INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem)
+       VALUES ($1,$2,'retirada_confirmada',false,$3) RETURNING ${COLUNAS_NOTIFICACAO}`,
+      [l.reservado_por, l.id, `${dados.doador.nome} confirmou a retirada do lote: ${l.alimento}.`]
+    );
     await client.query('COMMIT');
     res.json({ ok: true, doacao_id: doacao.rows[0].id, hash });
+    tempoReal.publicar(aviso.rows);
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -379,6 +415,36 @@ app.get('/verificar/:hash', rota(async (req, res) => {
   if (!r.rows[0]) return res.status(404).json({ erro: 'Comprovante não encontrado.' });
   const html = comprovantes.paginaVerificacao(r.rows[0]);
   res.set('Cache-Control', 'no-store').type('html').send(html);
+}));
+
+// ---------- Central de notificações (cada usuário só enxerga e altera as próprias) ----------
+const SELECT_NOTIFICACAO = 'id, tipo, urgente, mensagem, lote_id, criado_em, (lida_em IS NOT NULL) AS lida';
+
+app.get('/notificacoes', autenticar, rota(async (req, res) => {
+  const [itens, contagem] = await Promise.all([
+    pool.query(`SELECT ${SELECT_NOTIFICACAO} FROM notificacoes WHERE usuario_id = $1 ORDER BY id DESC LIMIT 50`,
+      [req.usuario.id]),
+    pool.query('SELECT COUNT(*)::int AS n FROM notificacoes WHERE usuario_id = $1 AND lida_em IS NULL',
+      [req.usuario.id]),
+  ]);
+  res.json({ nao_lidas: contagem.rows[0].n, itens: itens.rows });
+}));
+
+app.put('/notificacoes/lidas', autenticar, rota(async (req, res) => {
+  validar.corpo(req.body ?? {}, []);
+  const r = await pool.query(
+    'UPDATE notificacoes SET lida_em = now() WHERE usuario_id = $1 AND lida_em IS NULL', [req.usuario.id]);
+  res.json({ ok: true, marcadas: r.rowCount });
+}));
+
+app.put('/notificacoes/:id/lida', autenticar, rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  // Notificação de outro usuário é indistinguível de uma inexistente.
+  const r = await pool.query(
+    `UPDATE notificacoes SET lida_em = COALESCE(lida_em, now()) WHERE id = $1 AND usuario_id = $2
+     RETURNING ${SELECT_NOTIFICACAO}`, [id, req.usuario.id]);
+  if (!r.rows.length) return res.status(404).json({ erro: 'Notificação não encontrada.' });
+  res.json(r.rows[0]);
 }));
 
 // ---------- Histórico e indicadores ----------
@@ -431,4 +497,5 @@ app.use((erro, req, res, next) => {
 });
 
 const PORTA = process.env.PORT || 3000;
-app.listen(PORTA, () => console.log(`Rede AlimentaMS rodando em http://localhost:${PORTA}`));
+const servidor = app.listen(PORTA, () => console.log(`Rede AlimentaMS rodando em http://localhost:${PORTA}`));
+tempoReal.anexar(servidor); // WebSocket /ws no mesmo servidor HTTP
