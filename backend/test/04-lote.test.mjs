@@ -234,6 +234,7 @@ function contextoFront(extra = {}) {
 test('L03 front: card com miniatura escapada e "retirar até dd/mm hh:mm"; reserva limitada ao horário', async () => {
   const { contexto, elementos } = contextoFront();
   assert.equal(contexto.textoRetirada('2026-10-29T18:30'), '29/10 18:30');
+  assert.equal(contexto.textoRetirada('2026-10-30T00:00'), 'fim do dia 29/10');
   const agora = new Date('2026-10-28T15:00:00Z'); // 11:00 em Campo Grande
   assert.equal(contexto.padraoRetirada('2026-10-28', agora), '2026-10-28T18:00');
   assert.equal(contexto.padraoRetirada('2026-10-29', agora), '2026-10-29T18:00');

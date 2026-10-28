@@ -162,17 +162,22 @@ const notificarReceptoras = (tipo, origem, titulo, raio) =>
 async function atualizarStatus() {
   // Lote vencido → expirado (o código deixa de valer; a reserva fica como histórico). Lote ainda
   // disponível cujo horário limite de retirada passou também expira: ninguém mais consegue reservá-lo.
+  // O mesmo vale para a reserva atrasada (janela + tolerância vencidas) cujo prazo já passou: não há
+  // para quem liberar o lote, então ele expira aqui, sem notificação, antes do passo de liberação.
   await pool.query(
     `WITH vencidos AS (
        SELECT id FROM lotes
         WHERE (status IN ('disponivel','reservado') AND validade < ${HOJE})
            OR (status = 'disponivel' AND retirada_ate <= now())
+           OR (status = 'reservado' AND retirada_ate <= now()
+               AND janela_fim + make_interval(mins => $1) < now())
         ORDER BY id FOR UPDATE
      ), expirados AS (
        UPDATE lotes l SET status = 'expirado', codigo = NULL
          FROM vencidos v WHERE l.id = v.id RETURNING l.id
      )
-     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'expirado', NULL FROM expirados`
+     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'expirado', NULL FROM expirados`,
+    [TOLERANCIA_MINUTOS]
   );
   // Janela encerrada há mais que a tolerância sem retirada → volta a disponível para a próxima ONG
   // e avisa as receptoras no raio (a notificação nasce na mesma instrução da liberação).

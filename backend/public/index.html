@@ -292,7 +292,10 @@ const dataBR = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
 // "dd/mm hh:mm" a partir de AAAA-MM-DDTHH:MM (horário de Campo Grande).
 function textoRetirada(iso) {
   const [d, h] = iso.split('T');
-  return `${dataBR(d)} ${h}`;
+  if (h !== '00:00') return `${dataBR(d)} ${h}`;
+  const anterior = new Date(`${d}T12:00:00Z`); // 00:00 é o fim do dia anterior
+  anterior.setUTCDate(anterior.getUTCDate() - 1);
+  return `fim do dia ${dataBR(anterior.toISOString().slice(0, 10))}`;
 }
 
 // Sugestão do horário limite: 18:00 do dia da validade; se já estiver perto ou passado, o fim do dia.
@@ -387,7 +390,7 @@ async function carregarFoto(id) {
     const r = await respostaProtegida(`/lotes/${id}/foto`);
     const url = URL.createObjectURL(await r.blob());
     if (!elemento.isConnected) { URL.revokeObjectURL(url); return; }
-    imagensTemporarias.push(url); elemento.src = url; elemento.classList.remove('oculto');
+    imagensTemporarias.push(url); elemento.onerror = () => elemento.remove(); elemento.src = url; elemento.classList.remove('oculto');
   } catch { elemento.remove(); }
 }
 
