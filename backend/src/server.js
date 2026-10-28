@@ -12,11 +12,33 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET?.trim()) {
 }
 
 const app = express();
+// Atrás do Caddy (um único proxy): req.ip e req.protocol vêm de X-Forwarded-*.
+app.set('trust proxy', 1);
+// Sem CSP de script: o front usa handlers inline.
+app.use((req, res, next) => {
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'X-Frame-Options': 'DENY',
+  });
+  next();
+});
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 pool.on('error', (erro) => console.error('Erro inesperado em conexão ociosa do banco.', erro));
+
+// Saúde (pública, dados mínimos): usada pelo healthcheck do Docker e pelo grupo no VPS.
+app.get('/saude', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true, banco: true });
+  } catch (e) {
+    console.error('Falha na verificação de saúde do banco.', e);
+    res.status(503).json({ ok: false, banco: false });
+  }
+});
 const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento';
 const RAIO_METROS = 10000; // Fluxo 3: entidades num raio de até 10 km
 const HOJE = "(now() AT TIME ZONE 'America/Campo_Grande')::date";
