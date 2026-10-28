@@ -48,7 +48,7 @@ docker compose up --build
 ```
 Abra http://localhost:3000
 
-Para zerar o banco e recriar os dados de demonstração:
+Somente para um ambiente de demonstração descartável: o comando abaixo apaga o volume e todos os dados. Bancos com dados a preservar exigem backup e atualização controlada conforme DEPLOY; reconstruir contêiner não aplica schema em volume existente.
 ```bash
 docker compose down -v && docker compose up --build
 ```
@@ -81,18 +81,29 @@ Senha de todas as contas: `123456`. CNPJs são sintéticos.
 | Receptora fora do raio de 10 km | longe@demo.com |
 
 O seed cria:
-- 4 lotes disponíveis (validade hoje, amanhã, +2 e +4 dias), sem foto e com horário limite no fim do dia da validade;
+- 4 lotes disponíveis (validade hoje, amanhã, +2 e +4 dias), com horário limite no fim do dia da validade; “Frutas variadas” (id 3) tem miniatura PNG geométrica sintética, e os demais não têm foto. A miniatura não é fotografia de alimento real;
 - histórico de 30 dias: 16 doações entregues, com eventos e comprovantes de hash verificável, de modo que os indicadores já abrem com números;
 - 1 reserva perto de expirar (Padaria Pão Nosso → Casa de Apoio Esperança, código `482915`, janela termina ~25 min após a criação do banco). Depois da janela mais a tolerância, o lote volta a ficar disponível na primeira consulta.
 
-Os instantes são relativos ao momento da criação do banco; para reiniciar a demonstração, recrie o banco (comando acima).
+Os instantes são relativos ao momento da criação do banco; para reiniciar a demonstração, recrie apenas o banco descartável (comando acima). TMR/TEC refletem as definições da API, não garantia de metas: o histórico sintético reserva 3 h após publicar e começa com TMR acima de 90 min. Cadastros demo incluem contato fictício e aceite dos termos; nenhum comprovante de entidade é pré-carregado.
 
 ## Roteiro de demonstração
-1. Entre como **Doador (Comper)** e publique um lote.
-2. Entre como **ONG (Casa Esperança)**: o lote aparece ordenado por validade e distância. Reserve a retirada com uma janela e veja o código de 6 dígitos.
-3. Volte ao **Doador**, digite o código, marque o checklist e confirme a retirada.
-4. Veja a doação em *Doações registradas*, o comprovante e os indicadores atualizados.
-5. Teste as validações: quantidade 0 ou data vencida (Cenário 2). Entre como `longe@demo.com` e veja que nenhum lote aparece (raio de 10 km, PostGIS).
+
+[Demo de 5–7 minutos](docs/ROTEIRO_DEMO.md): Cenário 1 com Comper publicando 50 kg de frutas, notificações para Esperança/Amambai, reserva, QR, checklist, comprovante e indicadores. Usar sessões independentes; abas do mesmo perfil compartilham login. No celular, localhost aponta para o próprio aparelho: o grupo deve conferir uma origem acessível e o destino do QR antes do ensaio.
+
+[Roteiro de prints](docs/ROTEIRO_PRINTS.md): conta, preparação, estado esperado e destino proposto no relatório para cada tela. Ensaio visual deste complemento, câmera física, capturas definitivas e verificações humanas estão **PENDENTES**; resultados automatizados não comprovam esses itens.
+
+### Carga local (fora do npm test)
+
+Em `backend/`, com `TEST_DATABASE_URL` apontando para banco local exclusivo `alimentams_test` (ou sufixo permitido):
+
+```bash
+node test/carga.mjs
+```
+
+**Recria integralmente o banco descartável** com `db/init.sql`; não executar junto com testes ou demo no mesmo banco. A guarda recusa banco de desenvolvimento/produção antes de conectar. Inicia e encerra seu próprio servidor de teste na porta 3101; recusa porta ocupada. Não acessa VPS nem lê `.env`.
+
+Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisições medidas), com duas ONGs sintéticas alternadas. Salva média, p95, status, erros inesperados e unicidade também conferida no banco em [resultado-carga.md](docs/testes/resultado-carga.md). Conflitos 409 são esperados: uma reserva vence e as outras são recusadas. É medição local de uma execução, sem garantia de capacidade em produção. O script histórico `docs/testes/e2e-api.mjs` antecede os contratos atuais; a suíte vigente é `npm test`.
 
 ## API
 | Método | Rota | Acesso |
