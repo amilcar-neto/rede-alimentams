@@ -46,14 +46,26 @@ CREATE INDEX idx_eventos_lote ON eventos_lote (lote_id, id);
 
 CREATE TABLE doacoes (
   id           SERIAL PRIMARY KEY,
-  lote_id      INT NOT NULL REFERENCES lotes(id),
+  lote_id      INT NOT NULL UNIQUE REFERENCES lotes(id),
   doador_id    INT NOT NULL REFERENCES usuarios(id),
   receptor_id  INT NOT NULL REFERENCES usuarios(id),
   alimento     TEXT NOT NULL,
   quantidade_kg NUMERIC(10,2) NOT NULL,
   codigo       CHAR(6) NOT NULL,
-  data_hora    TIMESTAMPTZ NOT NULL DEFAULT now()
+  data_hora    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  checklist    JSONB NOT NULL CHECK (checklist = '{"embalagem_integra":true,"temperatura_adequada":true,"dentro_validade":true}'::jsonb),
+  comprovante  JSONB NOT NULL CHECK (jsonb_typeof(comprovante) = 'object'),
+  hash         TEXT NOT NULL UNIQUE CHECK (hash ~ '^[0-9a-f]{64}$')
 );
+
+-- Log de doações: correções não podem sobrescrever nem remover o registro emitido.
+CREATE FUNCTION impedir_alteracao_doacao() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION 'Doações confirmadas são imutáveis.' USING ERRCODE = '55000';
+END;
+$$;
+CREATE TRIGGER doacoes_imutaveis BEFORE UPDATE OR DELETE ON doacoes
+FOR EACH STATEMENT EXECUTE FUNCTION impedir_alteracao_doacao();
 
 -- ===== Dados de demonstração (senha de todos: 123456) =====
 -- CNPJs numéricos sintéticos com dígitos verificadores, sem consulta cadastral.

@@ -1,5 +1,5 @@
 // Adaptado de docs/testes/e2e-api.mjs; verificações originais preservadas.
-import { call, login, ok, dia, hoje, janela } from './helpers.mjs';
+import { call, login, ok, dia, hoje, janela, checklist } from './helpers.mjs';
 
 const comper = await login('comper@demo.com'), sabor = await login('sabor@demo.com');
 const esp = await login('esperanca@demo.com'), amb = await login('amambai@demo.com'), longe = await login('longe@demo.com');
@@ -27,12 +27,12 @@ ok('C1 reservar gera código 6 dígitos', r.s === 200 && /^\d{6}$/.test(r.d.codi
 const codigo = r.d.codigo;
 ok('Segunda ONG não reserva lote já reservado', (await call('PUT', `/lotes/${id}/reservar`, janela(dia(2)), amb)).s === 409);
 ok('ONG que não reservou não vê o código', !(await call('GET', '/lotes', undefined, amb)).d.some((l) => l.id === id));
-ok('Outro doador não confirma lote alheio', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo }, sabor)).s === 400);
-ok('Código errado rejeitado', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo: codigo === '000000' ? '111111' : '000000' }, comper)).s === 400);
+ok('Outro doador não confirma lote alheio', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo, checklist }, sabor)).s === 400);
+ok('Código errado rejeitado', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo: codigo === '000000' ? '111111' : '000000', checklist }, comper)).s === 400);
 const ind0 = (await call('GET', '/indicadores', undefined, comper)).d;
-r = await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo }, comper);
+r = await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo, checklist }, comper);
 ok('C1 confirmar retirada c/ código', r.s === 200);
-ok('Confirmar 2x não duplica', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo }, comper)).s === 400);
+ok('Confirmar 2x não duplica', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo, checklist }, comper)).s === 400);
 const dd = (await call('GET', '/doacoes', undefined, comper)).d;
 ok('C1 doação registrada (comprovante/log)', dd.some((x) => x.codigo === codigo && x.entidade === 'Casa de Apoio Esperança'));
 ok('C1 doação aparece p/ receptora', (await call('GET', '/doacoes', undefined, esp)).d.some((x) => x.codigo === codigo));

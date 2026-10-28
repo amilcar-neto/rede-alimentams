@@ -6,6 +6,7 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const validar = require('./validacao');
+const comprovantes = require('./comprovante');
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET?.trim()) {
   throw new Error('JWT_SECRET é obrigatório em produção.');
@@ -289,8 +290,9 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
 // Confirmar retirada (somente doador): valida o código e registra a doação.
 app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rota(async (req, res) => {
   const id = validar.id(req.params.id);
-  const b = validar.corpo(req.body, ['codigo']);
+  const b = validar.corpo(req.body, ['codigo', 'checklist']);
   const codigo = validar.codigo(b.codigo);
+  const checklist = comprovantes.validarChecklist(b.checklist);
   await atualizarStatus();
   const client = await pool.connect();
   try {
@@ -298,8 +300,9 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
     const r = await client.query(
       `UPDATE lotes SET status = 'entregue'
         WHERE id = $1 AND doador_id = $2 AND status = 'reservado' AND codigo = $3
+          AND validade >= ${HOJE} AND janela_fim + make_interval(mins => $4) >= now()
         RETURNING id, doador_id, reservado_por, alimento, quantidade_kg, codigo`,
-      [id, req.usuario.id, codigo]
+      [id, req.usuario.id, codigo, TOLERANCIA_MINUTOS]
     );
     if (!r.rows.length) {
       // Lote do próprio doador expirado ou com a reserva liberada: conflito de estado (409).
@@ -313,17 +316,28 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
       return res.status(400).json({ erro: 'Código inválido ou lote não está reservado.' });
     }
     const l = r.rows[0];
-    await client.query(
-      `INSERT INTO doacoes (lote_id, doador_id, receptor_id, alimento, quantidade_kg, codigo)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [l.id, l.doador_id, l.reservado_por, l.alimento, l.quantidade_kg, l.codigo]
+    const partes = await client.query('SELECT id, nome, cnpj FROM usuarios WHERE id = ANY($1::int[])',
+      [[l.doador_id, l.reservado_por]]);
+    const dataHora = (await client.query('SELECT now() AS instante')).rows[0].instante.toISOString();
+    const dados = {
+      versao: 1, lote_id: l.id,
+      doador: partes.rows.find((u) => u.id === l.doador_id),
+      receptora: partes.rows.find((u) => u.id === l.reservado_por),
+      alimento: l.alimento, quantidade_kg: l.quantidade_kg,
+      data_hora: dataHora, codigo: l.codigo, checklist,
+    };
+    const hash = comprovantes.hashDe(dados);
+    const doacao = await client.query(
+      `INSERT INTO doacoes (lote_id, doador_id, receptor_id, alimento, quantidade_kg, codigo, data_hora, checklist, comprovante, hash)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [l.id, l.doador_id, l.reservado_por, l.alimento, l.quantidade_kg, l.codigo, dataHora, checklist, dados, hash]
     );
     await client.query(
       `INSERT INTO eventos_lote (lote_id, tipo, usuario_id) VALUES ($1,'entregue',$2)`,
       [l.id, l.doador_id]
     );
     await client.query('COMMIT');
-    res.json({ ok: true });
+    res.json({ ok: true, doacao_id: doacao.rows[0].id, hash });
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -332,15 +346,46 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
   }
 }));
 
+// QR de retirada: somente a receptora que mantém a reserva ativa.
+app.get('/lotes/:id/qrcode', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  await atualizarStatus();
+  const r = await pool.query('SELECT reservado_por, status, codigo FROM lotes WHERE id=$1', [id]);
+  const l = r.rows[0];
+  if (!l) return res.status(404).json({ erro: 'Lote não encontrado.' });
+  if (l.reservado_por !== req.usuario.id) return res.status(403).json({ erro: 'QR disponível apenas para a entidade que reservou.' });
+  if (l.status !== 'reservado') return res.status(409).json({ erro: 'Este lote não tem reserva ativa.' });
+  const url = `${comprovantes.baseURL(req)}/#retirada/${id}/${l.codigo}`;
+  res.set('Cache-Control', 'no-store').type('png').send(await comprovantes.png(url));
+}));
+
+app.get('/doacoes/:id/comprovante', autenticar, rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  const r = await pool.query('SELECT id, doador_id, receptor_id, hash, comprovante FROM doacoes WHERE id=$1', [id]);
+  const d = r.rows[0];
+  if (!d) return res.status(404).json({ erro: 'Doação não encontrada.' });
+  if (![d.doador_id, d.receptor_id].includes(req.usuario.id))
+    return res.status(403).json({ erro: 'Comprovante disponível apenas para as duas partes da doação.' });
+  const html = await comprovantes.paginaComprovante(d, `${comprovantes.baseURL(req)}/verificar/${d.hash}`);
+  res.set('Cache-Control', 'no-store').type('html').send(html);
+}));
+
+// Pública por decisão D8: nenhum dado de cadastro ou código de retirada é exposto.
+app.get('/verificar/:hash', rota(async (req, res) => {
+  const hash = req.params.hash;
+  if (!/^[0-9a-f]{64}$/.test(hash)) return res.status(404).json({ erro: 'Comprovante não encontrado.' });
+  const r = await pool.query('SELECT hash, comprovante FROM doacoes WHERE hash=$1', [hash]);
+  if (!r.rows[0]) return res.status(404).json({ erro: 'Comprovante não encontrado.' });
+  res.set('Cache-Control', 'no-store').type('html').send(comprovantes.paginaVerificacao(r.rows[0]));
+}));
+
 // ---------- Histórico e indicadores ----------
 app.get('/doacoes', autenticar, rota(async (req, res) => {
   const coluna = req.usuario.perfil === 'doador' ? 'doador_id' : 'receptor_id';
   const r = await pool.query(
     `SELECT c.id, c.alimento, c.quantidade_kg, c.codigo, to_char(c.data_hora AT TIME ZONE 'America/Campo_Grande','DD/MM/YYYY HH24:MI') AS data,
-            d.nome AS doador, e.nome AS entidade
+            c.comprovante->'doador'->>'nome' AS doador, c.comprovante->'receptora'->>'nome' AS entidade
        FROM doacoes c
-       JOIN usuarios d ON d.id = c.doador_id
-       JOIN usuarios e ON e.id = c.receptor_id
       WHERE c.${coluna} = $1
       ORDER BY c.data_hora DESC`,
     [req.usuario.id]

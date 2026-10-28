@@ -7,6 +7,8 @@ export const hoje = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Campo_Grande', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
 export const dia = (n) => new Date(Date.parse(hoje + 'T12:00:00Z') + n * 86400e3).toISOString().slice(0, 10);
+// Contrato L04: confirmação exige os três itens sanitários afirmativos.
+export const checklist = { embalagem_integra: true, temperatura_adequada: true, dentro_validade: true };
 
 // Horário local de Campo Grande (AAAA-MM-DDTHH:MM), deslocado em minutos a partir de agora.
 export function local(minutos = 0) {

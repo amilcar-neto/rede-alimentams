@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { call, login, dia, hoje, janela, local } from './helpers.mjs';
+import { call, login, dia, hoje, janela, local, checklist } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 let comper, sabor, esperanca, amambai, longe;
@@ -16,7 +16,7 @@ const publicar = async (token = comper, validade = dia(2)) => {
 };
 // Sem o 3º argumento envia uma janela válida; passar undefined explicitamente envia sem corpo.
 const reservar = (id, token, ...corpo) => call('PUT', `/lotes/${id}/reservar`, corpo.length ? corpo[0] : janela(), token);
-const confirmar = (id, codigo, token = comper) => call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo }, token);
+const confirmar = (id, codigo, token = comper) => call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo, checklist }, token);
 const estado = async (id) => (await db.query('SELECT * FROM lotes WHERE id=$1', [id])).rows[0];
 const eventos = async (id) => (await db.query(
   'SELECT tipo, usuario_id FROM eventos_lote WHERE lote_id=$1 ORDER BY id', [id])).rows;
