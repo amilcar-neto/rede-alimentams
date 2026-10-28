@@ -51,7 +51,8 @@ for (const [nome, b, esperado] of [
 
 // Cadastro
 const em = `t${Date.now()}@x.com`;
-const reg = (b) => call('POST', '/auth/register', { nome: 'ONG Teste', email: em, senha: '123456', perfil: 'receptora', bairro: 'Centro', cnpj: '11.222.333/0001-81', ...b });
+const reg = (b) => call('POST', '/auth/register', { nome: 'ONG Teste', email: em, senha: '123456', perfil: 'receptora', bairro: 'Centro', cnpj: '11.222.333/0001-81',
+  endereco: 'Rua Teste, 1', responsavel: 'Responsável Teste', telefone: '67999990000', aceite_termos: true, ...b });
 r = await reg({}); ok('Cadastro receptora ok', r.s === 201);
 ok('Cadastro e-mail duplicado -> 409', (await reg({})).s === 409);
 ok('Cadastro senha curta -> 400', (await reg({ email: 'a' + em, senha: '123' })).s === 400);

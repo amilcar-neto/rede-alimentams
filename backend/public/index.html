@@ -88,6 +88,12 @@
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 11; max-width: min(480px, calc(100vw - 24px)); background: #263238; color: #fff; border-radius: 8px; padding: 10px 14px; box-shadow: 0 4px 16px rgba(0,0,0,.3); font-size: .92rem; }
   .toast.urgente { background: var(--verm); }
   .toast button { margin-left: 8px; padding: 3px 8px; font-size: .8rem; background: #fff; color: var(--texto); }
+  label.aceite { display: flex; gap: 8px; align-items: flex-start; color: var(--texto); margin: 14px 0 4px; }
+  label.aceite input { width: auto; margin-top: 3px; }
+  .ind small { display: block; margin-top: 6px; font-size: .78rem; opacity: .95; }
+  .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; }
+  .campos div { padding: 4px 0; border-bottom: 1px solid var(--borda); font-size: .92rem; }
+  .campos b { display: block; color: var(--suave); font-weight: 600; font-size: .78rem; }
   .oculto { display: none !important; }
 </style>
 </head>
@@ -125,12 +131,20 @@
     <div id="boxCadastro" class="oculto">
       <h2>Criar conta</h2>
       <label for="cPerfil">Tipo de conta</label>
-      <select id="cPerfil"><option value="doador">Estabelecimento doador</option><option value="receptora">Entidade receptora (ONG)</option></select>
+      <select id="cPerfil" onchange="alternarComprovante()"><option value="doador">Estabelecimento doador</option><option value="receptora">Entidade receptora (ONG)</option></select>
       <label for="cNome">Nome / Razão social</label><input id="cNome" maxlength="200">
       <label for="cCnpj">CNPJ</label><input id="cCnpj" placeholder="00.000.000/0000-00" inputmode="numeric" oninput="mascararCnpj(this)">
+      <label for="cEndereco">Endereço</label><input id="cEndereco" maxlength="250" placeholder="Rua, número e complemento" autocomplete="street-address">
       <label for="cBairro">Bairro</label><select id="cBairro"></select>
+      <label for="cResponsavel">Responsável</label><input id="cResponsavel" maxlength="200" autocomplete="name">
+      <label for="cTelefone">Telefone do responsável</label><input id="cTelefone" placeholder="(67) 99999-9999" inputmode="tel" maxlength="16" oninput="mascararTelefone(this)" autocomplete="tel">
       <label for="cEmail">E-mail</label><input id="cEmail" type="email" maxlength="254">
       <label for="cSenha">Senha (mínimo 6 caracteres)</label><input id="cSenha" type="password" maxlength="72">
+      <div id="boxComprovante" class="oculto">
+        <label for="cComprovante">Comprovante de entidade sem fins lucrativos (opcional · PDF, JPEG ou PNG até 1 MB)</label>
+        <input id="cComprovante" type="file" accept="application/pdf,image/jpeg,image/png">
+      </div>
+      <label class="aceite" for="cAceite"><input id="cAceite" type="checkbox"><span>Li e aceito o <a href="/termos.html#termo" target="_blank" rel="noopener">Termo de Responsabilidade</a> e a <a href="/termos.html#privacidade" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
       <div id="erroCadastro"></div>
       <p><button onclick="cadastrar()">Criar conta</button></p>
       <p class="meta">Já tem conta? <button class="link" onclick="trocar(false)">Entrar</button></p>
@@ -178,6 +192,34 @@ function mascararCnpj(input) {
     .replace(/(\d{4})(\d)/, '$1-$2');
 }
 
+// (67) 99999-9999 ou (67) 3333-0001; aceita colar com +55.
+function mascararTelefone(input) {
+  let d = input.value.replace(/\D/g, '');
+  if (d.length > 11 && d.startsWith('55')) d = d.slice(2);
+  d = d.slice(0, 11);
+  input.value = d.length > 10 ? d.replace(/^(\d{2})(\d{5})(\d{0,4})$/, '($1) $2-$3')
+    : d.length > 6 ? d.replace(/^(\d{2})(\d{4})(\d{0,4})$/, '($1) $2-$3')
+    : d.length > 2 ? d.replace(/^(\d{2})(\d{0,5})$/, '($1) $2') : d;
+}
+
+const COMPROVANTE_TIPOS = { 'application/pdf': 'PDF', 'image/jpeg': 'JPEG', 'image/png': 'PNG' };
+const COMPROVANTE_BYTES_MAX = 1024 * 1024;
+
+function validarArquivoComprovante(arquivo) {
+  if (!COMPROVANTE_TIPOS[arquivo.type]) throw new Error('O comprovante deve ser um arquivo PDF, JPEG ou PNG.');
+  if (arquivo.size > COMPROVANTE_BYTES_MAX) throw new Error('O comprovante deve ter no máximo 1 MB.');
+}
+
+async function enviarComprovante(arquivo) {
+  validarArquivoComprovante(arquivo);
+  return api('PUT', '/perfil/comprovante', { arquivo: await lerBase64(arquivo) });
+}
+
+// O anexo só existe para a entidade receptora.
+function alternarComprovante() {
+  $('boxComprovante').classList.toggle('oculto', $('cPerfil').value !== 'receptora');
+}
+
 function dataAmanha(agora = new Date()) {
   const partes = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Campo_Grande', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -218,11 +260,22 @@ async function entrar() {
 }
 async function cadastrar() {
   try {
+    const arquivo = $('cPerfil').value === 'receptora' ? $('cComprovante').files[0] : null;
+    if (arquivo) validarArquivoComprovante(arquivo);
     const d = await api('POST', '/auth/register', {
       perfil: $('cPerfil').value, nome: $('cNome').value, cnpj: $('cCnpj').value,
+      endereco: $('cEndereco').value, responsavel: $('cResponsavel').value, telefone: $('cTelefone').value,
       bairro: $('cBairro').value, email: $('cEmail').value, senha: $('cSenha').value,
+      aceite_termos: $('cAceite').checked,
     });
+    // O comprovante vai logo depois, já com a sessão da conta recém-criada; se falhar, a conta continua válida.
+    let falhaAnexo = null;
+    if (arquivo) {
+      token = d.token;
+      try { await enviarComprovante(arquivo); } catch (e) { falhaAnexo = e.message; }
+    }
     iniciarSessao(d);
+    if (falhaAnexo) mostrarAviso(`Conta criada, mas o comprovante não foi enviado: ${falhaAnexo} Envie-o em "Meus números".`, true);
   } catch (e) { msg('erroCadastro', e.message); }
 }
 function iniciarSessao(d) {
@@ -238,7 +291,7 @@ function sair() {
   $('telaApp').classList.add('oculto'); $('sessao').classList.add('oculto');
   $('telaAuth').classList.remove('oculto');
   msg('erroLogin', ''); msg('erroCadastro', '');
-  $('cSenha').value = '';
+  $('cSenha').value = ''; $('cAceite').checked = false; $('cComprovante').value = '';
   trocar(false);
 }
 
@@ -250,8 +303,8 @@ function mostrarApp() {
   $('quem').textContent = `${usuario.nome} (${usuario.perfil === 'doador' ? 'Doador' : 'Entidade receptora'})`;
   iniciarTempoReal();
   const abas = usuario.perfil === 'doador'
-    ? [['lotes', 'Meus lotes'], ['publicar', 'Publicar lote'], ['doacoes', 'Doações registradas']]
-    : [['lotes', 'Lotes disponíveis'], ['doacoes', 'Doações recebidas']];
+    ? [['lotes', 'Meus lotes'], ['publicar', 'Publicar lote'], ['doacoes', 'Doações registradas'], ['numeros', 'Meus números']]
+    : [['lotes', 'Lotes disponíveis'], ['doacoes', 'Doações recebidas'], ['numeros', 'Meus números']];
   $('abas').innerHTML = abas.map(([id, nome]) => `<button data-aba="${id}" onclick="irPara('${id}')">${nome}</button>`).join('');
   irPara('lotes');
 }
@@ -264,20 +317,92 @@ async function irPara(aba) {
   try {
     if (aba === 'lotes') await telaLotes();
     else if (aba === 'publicar') telaPublicar();
+    else if (aba === 'numeros') await telaNumeros();
     else await telaDoacoes();
   } catch (e) { $('conteudo').innerHTML = `<div class="msg erro">${esc(e.message)}</div>`; }
 }
 
+// Cartões do painel (global e "Meus números"): TMR e TEC levam a meta ao lado e se está atingida.
+function htmlIndicadores(i, { entidades = ['entidades beneficiadas', i.entidades], doacoes = false } = {}) {
+  const f = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const situacao = (atingida) => (atingida === null ? 'sem dados ainda' : atingida ? 'meta atingida' : 'meta não atingida');
+  return `
+    <div class="ind" style="background:var(--verde)"><b>${f(i.kg)}</b><span>kg salvos do descarte</span></div>
+    <div class="ind" style="background:var(--azul)"><b>${f(i.refeicoes)}</b><span>refeições complementadas</span></div>
+    <div class="ind" style="background:var(--laranja)"><b>${f(i.co2)}</b><span>kg de CO₂e evitados</span></div>
+    <div class="ind" style="background:var(--teal)"><b>${f(i.agua)}</b><span>litros de água evitados</span></div>
+    ${doacoes ? `<div class="ind" style="background:#00695c"><b>${f(i.doacoes)}</b><span>doações concluídas</span></div>` : ''}
+    <div class="ind" style="background:#5e35b1"><b>${f(entidades[1])}</b><span>${esc(entidades[0])}</span></div>
+    <div class="ind" style="background:#455a64"><b>${i.tmr_minutos === null ? '—' : f(i.tmr_minutos) + ' min'}</b><span>TMR · tempo médio até a reserva</span>
+      <small>Meta: menos de ${f(i.metas.tmr_minutos)} min · ${situacao(i.metas.tmr_atingida)}</small></div>
+    <div class="ind" style="background:#37474f"><b>${i.tec_percentual === null ? '—' : f(i.tec_percentual) + '%'}</b><span>TEC · taxa de entrega concluída</span>
+      <small>Meta: acima de ${f(i.metas.tec_percentual)}% · ${situacao(i.metas.tec_atingida)}</small></div>`;
+}
+
 async function carregarIndicadores() {
   try {
-    const i = await api('GET', '/indicadores');
-    const f = (n) => n.toLocaleString('pt-BR');
-    $('indicadores').innerHTML = `
-      <div class="ind" style="background:var(--verde)"><b>${f(i.kg)}</b><span>kg salvos do descarte</span></div>
-      <div class="ind" style="background:var(--azul)"><b>${f(i.refeicoes)}</b><span>refeições complementadas</span></div>
-      <div class="ind" style="background:var(--laranja)"><b>${f(i.co2)}</b><span>kg de CO₂e evitados</span></div>
-      <div class="ind" style="background:var(--teal)"><b>${f(i.agua)}</b><span>litros de água evitados</span></div>`;
+    $('indicadores').innerHTML = htmlIndicadores(await api('GET', '/indicadores'));
   } catch {}
+}
+
+const dataHoraBR = (iso) => new Date(iso).toLocaleString('pt-BR', {
+  timeZone: 'America/Campo_Grande', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const formatarCnpj = (d) => String(d ?? '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+const formatarTelefone = (d) => String(d ?? '').replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3');
+const SITUACAO = { aprovado: 'Aprovado', pendente: 'Pendente de análise', rejeitado: 'Rejeitado' };
+
+// "Meus números": só as doações e lotes do próprio usuário, mais os dados do cadastro.
+async function telaNumeros() {
+  const [m, p] = await Promise.all([api('GET', '/indicadores/meus'), api('GET', '/perfil')]);
+  const receptora = usuario.perfil === 'receptora';
+  const campo = (rotulo, valor) => `<div><b>${esc(rotulo)}</b>${esc(valor)}</div>`;
+  const comprovante = !receptora ? '' : `
+    <h3 class="secao">Comprovante de entidade sem fins lucrativos</h3>
+    <div id="erroComprovanteEntidade"></div>
+    <p class="meta">${p.tem_comprovante
+      ? `Anexado (${esc(COMPROVANTE_TIPOS[p.comprovante_tipo] || '')}) em ${esc(dataHoraBR(p.comprovante_enviado_em))}.`
+      : 'Nenhum comprovante anexado.'}</p>
+    <input id="pComprovante" type="file" accept="application/pdf,image/jpeg,image/png" aria-label="Arquivo do comprovante">
+    <p class="meta">PDF, JPEG ou PNG de até 1 MB.</p>
+    <div class="acao" style="justify-content:flex-start"><button onclick="anexarComprovante()">${p.tem_comprovante ? 'Substituir comprovante' : 'Enviar comprovante'}</button>
+      ${p.tem_comprovante ? '<button class="azul" onclick="abrirComprovanteEntidade()">Abrir comprovante enviado</button>' : ''}</div>`;
+  $('conteudo').innerHTML = `<div id="aviso"></div>
+    <h2 class="secao">Meus números</h2>
+    <div class="indicadores">${htmlIndicadores(m, {
+      doacoes: true, entidades: receptora ? ['doadores atendidos', m.doadores] : ['entidades beneficiadas', m.entidades] })}</div>
+    <p class="nota">Considera apenas as doações e os lotes da sua conta. TMR: média do tempo entre a publicação e a reserva; TEC: lotes entregues ÷ (entregues + expirados).</p>
+    <h2 class="secao">Meu cadastro</h2>
+    <div class="painel"><div class="campos">
+      ${campo('Nome / Razão social', p.nome)}${campo('CNPJ', formatarCnpj(p.cnpj))}${campo('Endereço', p.endereco)}
+      ${campo('Bairro', p.bairro)}${campo('Responsável', p.responsavel)}${campo('Telefone', formatarTelefone(p.telefone))}
+      ${campo('E-mail', p.email)}${campo('Situação do cadastro', SITUACAO[p.situacao] || p.situacao)}
+      ${campo('Termos aceitos em', `${dataHoraBR(p.aceite_termos_em)} (versão ${p.termos_versao})`)}
+    </div>${comprovante}</div>`;
+}
+
+async function anexarComprovante() {
+  try {
+    const arquivo = $('pComprovante').files[0];
+    if (!arquivo) throw new Error('Escolha um arquivo PDF, JPEG ou PNG.');
+    await enviarComprovante(arquivo);
+    await telaNumeros();
+    msg('aviso', 'Comprovante enviado.', 'ok');
+  } catch (e) { if (e.status !== 401) msg('erroComprovanteEntidade', e.message); }
+}
+
+async function abrirComprovanteEntidade() {
+  const janela = window.open('', '_blank');
+  try {
+    if (!janela) throw new Error('Permita abrir o comprovante em uma nova aba.');
+    janela.opener = null;
+    const r = await respostaProtegida('/perfil/comprovante');
+    const url = URL.createObjectURL(await r.blob());
+    janela.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    if (janela) janela.close();
+    msg('erroComprovanteEntidade', e.message);
+  }
 }
 
 function tagValidade(dias) {
