@@ -98,3 +98,46 @@ Esta revisão executou a conferência visual de fato. O servidor foi encerrado e
 1. Corrigir M1 em `server.js` e adicionar o teste de regressão correspondente.
 2. Opcional, recomendado: B1 e B2.
 3. Rodar `npm test` em backend/ e devolver para nova revisão apenas do delta (M1). Os demais itens desta revisão permanecem válidos para o commit `0b01a50`.
+
+---
+
+## Revisão 2 — delta das correções (commit `ccd67c1`) — 28/10/2026
+
+- Ferramenta: claude; papel: revisor independente. Sem subagentes. Diff revisado: `639b522..ccd67c1` (delta) e uma releitura do diff de produto `main..HEAD` (`server.js`, `validacao.js`, `index.html`, `init.sql`, `helpers.mjs`, `02-validacoes.test.mjs`).
+- Nenhum código, teste ou outro arquivo foi alterado; somente este relatório foi atualizado. A seção anterior continua válida para os itens que este delta não toca.
+
+### Conclusão
+
+**Aprovado (ready).** Não há achados críticos, altos ou médios em aberto. M1, B1 e B2 foram corrigidos e verificados. B3, I1 e I2 seguem como limitações registradas e não impedem o lote.
+
+### Verificação do delta
+
+| Item | Evidência |
+|---|---|
+| M1 — corpo comprimido inválido | `server.js:255-257`: erros do cliente (`expose` e status 4xx) passam a responder com o mesmo status e a mensagem pt-BR genérica, sem ecoar `erro.message`. Os ramos específicos anteriores foram mantidos. Erros com status 5xx ou sem `expose` continuam sendo registrados e retornam 500, então falha interna não vira erro de validação. Teste novo `02-validacoes.test.mjs:120-131` (gzip/deflate). Conferido também no navegador: `fetch` com `Content-Encoding: gzip` e corpo `xxxx` retornou **400** `{"erro":"Requisição inválida. Confira os dados enviados."}`. Na revisão 1, o mesmo caso retornava 500. |
+| B1 — colagem do CNPJ | `index.html:104`: `maxlength` removido; `mascararCnpj` continua limitado a 14 dígitos. No navegador, com foco real no campo, `insertText` de ` CNPJ: 11.222.333/0001-81 ` resultou em `11.222.333/0001-81` (antes ficava `…-8`). |
+| B2 — mensagem de campo vazio | `validacao.js:17-19`: a mensagem de vazio é "<campo> é obrigatório(a)." e a de excesso é "no máximo N caracteres". No navegador, o cadastro com nome vazio mostrou "Nome é obrigatório(a).". Teste novo `02-validacoes.test.mjs:133-140`. |
+| Testes intactos | O delta só acrescenta testes. Nenhum teste anterior foi removido ou afrouxado. `01-base.test.mjs` não aparece no diff `main..HEAD`. |
+| `npm test` (backend/, nesta revisão) | código 0; **67 pass / 0 fail / 0 todo / 0 skipped / 0 cancelled**; duration_ms 9271,7 |
+
+### Releitura do escopo L01 (resumo)
+
+- Todos os critérios de aceite do PLANO §L01 estão cumpridos, com evidência na suíte e no código: tipos, trim e limites; `:id` positivo até INT32; 0 < kg ≤ 10.000; data real; categoria fechada; e-mail; CNPJ por DV, normalizado (`…-81` aceito; `…-82` e `123` rejeitados com 400); seed com CNPJs sintéticos válidos; JSON malformado → 400; `pool.on('error')`; produção sem `JWT_SECRET` não sobe; máscara no front; "amanhã" em America/Campo_Grande; nove pendências do L00 aprovadas sem TODO; fuzz das cinco operações sem 500.
+- SQL continua parametrizado. A validação de id e corpo ocorre depois de `autenticar`/`exigirPerfil`. Somente `ErroValidacao` vira 400 (`server.js:40`).
+
+### Conferência visual desta revisão (Claude in Chrome, http://localhost:3000)
+
+- Servidor iniciado somente com `node backend/src/server.js` em segundo plano, usando o banco descartável do ambiente. A primeira tentativa falhou porque o diretório corrente era `backend/`, e o arquivo não foi encontrado. A segunda, a partir da raiz, funcionou. O servidor foi encerrado (TaskStop) e a aba fechada ao final. Nenhum print salvo em disco e nenhuma conta nova criada.
+- Conferidos: Sair → tela de login → "Cadastre-se"; colagem do CNPJ com prefixo e espaços (B1); erro de nome vazio (B2); `Content-Encoding: gzip` inválido → 400 JSON (M1).
+- O roteiro visual da revisão 1 e do executor (`…-82` rejeitado, `…-81` aceito, quantidade 2.5, amanhã 29/10, reserva/confirmação, login demo) não foi repetido. As evidências continuam registradas acima e no checklist.
+
+### Pendências não impeditivas (mantidas)
+
+- B3: texto longo sem quebra estoura o card (`index.html`, CSS), problema anterior ao lote. Sugerido `overflow-wrap: anywhere` em L03/L08.
+- I1: CNPJ alfanumérico [VERIFICAR] fica como melhoria futura.
+- I2: mudanças do controlador no mesmo diff (`scripts/agentes/*`, `docs/EXECUCAO_AUTOMATICA.md`, `PLANO_AGENTES.md:141-142`), com inconsistência documental sobre `permission_denied`, e `docs/testes/controlador-retomada-claude.txt` em UTF-16. Ficam fora do escopo de produto; o grupo deve harmonizar em tarefa de planejamento.
+- Observação menor, sem achado: ao editar no meio do CNPJ, a máscara reescreve `value` e o cursor vai para o fim. É apenas uma questão de usabilidade.
+
+### Próximo passo
+
+- O controlador pode integrar o L01. As pendências B3, I1 e I2 devem ser registradas para lotes ou tarefas posteriores.
