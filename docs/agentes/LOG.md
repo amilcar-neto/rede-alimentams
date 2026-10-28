@@ -204,3 +204,12 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Navegador (Claude in Chrome): conferidos `maxLength` = 20 e o caminho 4001 do front (sem reconexão, aviso exibido). Servidor e aba encerrados. **Conferência visual humana PENDENTE** (roteiro de 6 passos e 22 estados; checklist em progresso/FINAL.md). Restauração do DEPLOY.md não executada (sem Docker/VPS).
 - Limitações: B1 (tentativas de código) não corrigida; revisão independente do commit corrigido e pendências [GRUPO] continuam abertas.
 - Próximo passo: controlador repete testes e chama nova revisão do commit corrigido.
+
+## 28/10/2026 — POLIMENTO — implementação claude (pedido direto do usuário)
+
+- Executor único, sem subagentes, direto em `main` sem commit (pedido do usuário: "código redondinho" antes do relatório). Sem VPS, publicação ou dados reais. Checklist em [POLIMENTO](progresso/POLIMENTO.md).
+- B1 corrigido: 5 códigos errados seguidos bloqueiam a confirmação do lote por 15 min (429); contagem com `FOR UPDATE`, zerada a cada reserva. Limite de login em memória (10 erros por conta+IP, 50 por IP, 15 min, 429 + Retry-After). A4 corrigido: POST /lotes (e /lotes/) autentica antes de ler o corpo de até 700 KB. A5 corrigido: `docs/testes/e2e-api.mjs` atualizado aos contratos atuais (55/55 contra servidor de teste na porta 3200).
+- Novo: `PUT /lotes/:id/cancelar-reserva` (receptora desiste; lote volta na hora, doador e demais ONGs do raio avisados) e `PUT /lotes/:id/cancelar` (doador cancela lote disponível/reservado; ONG avisada com urgência). Schema: status `cancelado`, eventos `reserva_cancelada`/`cancelado`, notificações `reserva_cancelada`/`lote_cancelado`, colunas `tentativas_codigo`/`ultima_falha_codigo`.
+- Front: botões "Desistir da reserva" e "Cancelar lote" com confirmação no próprio cartão (sem diálogo do navegador), Enter envia login/cadastro, kg em pt-BR (12,5), tolerância vinda do servidor, texto de lote expirado correto quando o prazo de retirada passa.
+- Testes: `npm.cmd test` em backend/: **175 pass / 0 fail** (eram 158; novo `10-cancelamento-limites.test.mjs` com 17 testes, inclusive concorrência e WebSocket). Nenhuma asserção anterior alterada.
+- Não executado: conferência visual no navegador (servidor em segundo plano negado nesta sessão), carga (cenário medido não mudou de forma relevante). Bancos existentes precisam ser recriados (schema novo).

@@ -27,6 +27,8 @@ Preparar banco e sessões conforme [roteiro de demo](ROTEIRO_DEMO.md). Todas as 
 | 19-fora-raio | `longe@demo.com` → “Lotes disponíveis”. | Sem lotes no raio de 10 km. | Testes / regra geográfica |
 | 20-reserva-seed | Pão Nosso e Esperança, seed recém-criado → lote 21. | “Bolos e roscas”, código `482915`, fim da janela ~25 min após criação; observar tolerância antes da liberação. | Testes / expiração |
 | 21-mobile | Repetir 07, 09 e 16 em celular/viewport real. | Sem cortes nos campos, QR legível e tabela navegável horizontalmente. Registrar dimensões e limitações. | Interface / usabilidade |
+| 23-desistencia | Amambai → reservar lote do seed → “Desistir da reserva” → confirmação no cartão. | Pergunta de confirmação; depois aviso verde e lote disponível de novo; sino do doador com “desistiu da reserva”. | Solução / Fluxo 4 (redirecionamento) |
+| 24-cancelar-lote | Comper → “Cancelar lote” num lote reservado → confirmar. | Lote some de “Meus lotes”; na ONG que reservou, aviso urgente “cancelou o lote”. | Solução / Fluxo 2 |
 | 22-carga | Abrir `docs/testes/resultado-carga.md` após execução concluída. | Mostrar 20/200, média, p95, erros e uma reserva vencedora; legendas de método e limites. É relatório de teste, não print de produção. | Testes / Cenário 3 |
 
 Não é necessário esperar a liberação do lote 21 durante a demo de 5–7 min. Se capturar a liberação, registrar consulta após janela + tolerância e o momento real; não atribuir disparo a cronômetro/worker, pois o ciclo é atualizado nas rotas de lotes.

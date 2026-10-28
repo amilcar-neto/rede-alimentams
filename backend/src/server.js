@@ -31,8 +31,11 @@ app.use((req, res, next) => {
 const jsonPadrao = express.json();
 const jsonLote = express.json({ limit: '700kb' });
 const jsonComprovante = express.json({ limit: '1500kb' });
+// O Express trata /lotes e /lotes/ como a mesma rota; o limite maior vale para as duas formas.
+const ehPublicarLote = (req) => req.method === 'POST' && (req.path === '/lotes' || req.path === '/lotes/');
 app.use((req, res, next) => {
-  if (req.method === 'POST' && req.path === '/lotes') return jsonLote(req, res, next);
+  // Corpos grandes só são lidos depois de autenticados: requisição anônima recebe 401 sem leitura.
+  if (ehPublicarLote(req)) return autenticar(req, res, () => jsonLote(req, res, next));
   if (req.method === 'PUT' && req.path === '/perfil/comprovante')
     return autenticar(req, res, () => jsonComprovante(req, res, next));
   return jsonPadrao(req, res, next);
@@ -76,6 +79,34 @@ const BAIRROS = {
   'Coronel Antonino': [-54.575, -20.439],
   'Vila Carvalho': [-54.6, -20.5],
 };
+
+// Confirmação de retirada: 5 códigos errados seguidos bloqueiam novas tentativas no lote por 15 min.
+const MAX_TENTATIVAS_CODIGO = 5;
+const BLOQUEIO_CODIGO_MINUTOS = 15;
+
+// Login: até 10 erros por conta e 50 por IP a cada 15 min; depois, 429 até a janela acabar.
+// Contagem em memória (um único processo); reiniciar o servidor zera os contadores.
+const JANELA_LOGIN_MS = 15 * 60000;
+const LIMITE_LOGIN = { conta: 10, ip: 50 };
+const falhasLogin = new Map(); // chave → { n, desde }
+function loginBloqueado(chaves) {
+  const agora = Date.now();
+  return chaves.some(([chave, maximo]) => {
+    const f = falhasLogin.get(chave);
+    return f && agora - f.desde < JANELA_LOGIN_MS && f.n >= maximo;
+  });
+}
+function registrarFalhaLogin(chaves) {
+  const agora = Date.now();
+  // Limpeza preguiçosa (sem timer): descarta janelas vencidas quando o mapa cresce.
+  if (falhasLogin.size > 1000)
+    for (const [chave, f] of falhasLogin) if (agora - f.desde >= JANELA_LOGIN_MS) falhasLogin.delete(chave);
+  for (const [chave] of chaves) {
+    const f = falhasLogin.get(chave);
+    if (!f || agora - f.desde >= JANELA_LOGIN_MS) falhasLogin.set(chave, { n: 1, desde: agora });
+    else f.n += 1;
+  }
+}
 
 // Fatores de conversão do painel (mesmos do protótipo, apenas demonstrativos)
 const FATORES = { refeicoes: 2, co2: 2.5, agua: 350 };
@@ -151,10 +182,17 @@ app.post('/auth/login', rota(async (req, res) => {
     return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
   const email = validar.email(b.email);
   const senha = validar.senha(b.senha, 1);
+  const chaves = [[`conta:${req.ip}:${email}`, LIMITE_LOGIN.conta], [`ip:${req.ip}`, LIMITE_LOGIN.ip]];
+  if (loginBloqueado(chaves))
+    return res.status(429).set('Retry-After', String(JANELA_LOGIN_MS / 1000))
+      .json({ erro: 'Muitas tentativas de login sem sucesso. Aguarde 15 minutos e tente novamente.' });
   const r = await pool.query('SELECT id, nome, perfil, senha_hash FROM usuarios WHERE email = $1', [email]);
   const u = r.rows[0];
-  if (!u || !(await bcrypt.compare(senha, u.senha_hash)))
+  if (!u || !(await bcrypt.compare(senha, u.senha_hash))) {
+    registrarFalhaLogin(chaves);
     return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+  }
+  falhasLogin.delete(chaves[0][0]);
   res.json({ token: gerarToken(u), usuario: { id: u.id, nome: u.nome, perfil: u.perfil } });
 }));
 
@@ -199,14 +237,14 @@ app.get('/perfil/comprovante', autenticar, exigirPerfil('receptora'), rota(async
 // O destinatário é escolhido no servidor, em SQL, na mesma instrução que muda o lote.
 // Receptoras: apenas as do raio de 10 km do doador; urgente quando a validade é de hoje ou amanhã.
 const NOTIFICACOES_JSON = "(SELECT COALESCE(json_agg(x), '[]'::json) FROM notificadas x)";
-const notificarReceptoras = (tipo, origem, titulo, raio) =>
+const notificarReceptoras = (tipo, origem, titulo, raio, filtro = '') =>
   `notificadas AS (
        INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem)
        SELECT r.id, o.id, '${tipo}', (o.validade - ${HOJE}) <= 1,
               '${titulo}: ' || o.alimento || ' (' || o.quantidade_kg::float8::text || ' kg) de ' || d.nome || '.'
          FROM ${origem} o
          JOIN usuarios d ON d.id = o.doador_id
-         JOIN usuarios r ON r.perfil = 'receptora' AND ST_DWithin(d.localizacao, r.localizacao, ${raio})
+         JOIN usuarios r ON r.perfil = 'receptora' AND ST_DWithin(d.localizacao, r.localizacao, ${raio}) ${filtro}
        RETURNING ${COLUNAS_NOTIFICACAO}
      )`;
 
@@ -282,7 +320,8 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
             ${LOCAL('l.retirada_ate')} AS retirada_ate, (l.foto IS NOT NULL) AS tem_foto,
             CASE WHEN l.reservado_por = $1 THEN l.codigo END AS codigo,
             CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_inicio')} END AS janela_inicio,
-            CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_fim')} END AS janela_fim
+            CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_fim')} END AS janela_fim,
+            CASE WHEN l.reservado_por = $1 THEN $3::int END AS tolerancia_minutos
        FROM lotes l
        JOIN usuarios d ON d.id = l.doador_id
        JOIN usuarios r ON r.id = $1
@@ -290,7 +329,7 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
              AND ST_DWithin(d.localizacao, r.localizacao, $2))
          OR (l.status = 'reservado' AND l.reservado_por = $1)
       ORDER BY (l.status = 'reservado') DESC, l.validade, distancia_km`,
-    [req.usuario.id, RAIO_METROS]
+    [req.usuario.id, RAIO_METROS, TOLERANCIA_MINUTOS]
   );
   res.json(r.rows);
 }));
@@ -376,7 +415,7 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
     `WITH reserva AS (
        UPDATE lotes l
           SET status = 'reservado', reservado_por = $2, reservado_em = now(), codigo = $3,
-              janela_inicio = $5, janela_fim = $6
+              janela_inicio = $5, janela_fim = $6, tentativas_codigo = 0, ultima_falha_codigo = NULL
         WHERE l.id = $1 AND l.status = 'disponivel' AND l.validade >= ${HOJE}
           AND EXISTS (SELECT 1 FROM usuarios d, usuarios r
                        WHERE d.id = l.doador_id AND r.id = $2
@@ -409,6 +448,18 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Trava a linha do lote: tentativas simultâneas são contadas uma a uma.
+    const atual = await client.query(
+      `SELECT status, codigo,
+              (tentativas_codigo >= $3 AND ultima_falha_codigo > now() - make_interval(mins => $4)) AS bloqueado
+         FROM lotes WHERE id = $1 AND doador_id = $2 FOR UPDATE`,
+      [id, req.usuario.id, MAX_TENTATIVAS_CODIGO, BLOQUEIO_CODIGO_MINUTOS]
+    );
+    const travado = atual.rows[0];
+    if (travado?.status === 'reservado' && travado.bloqueado) {
+      await client.query('ROLLBACK');
+      return res.status(429).json({ erro: `Muitas tentativas com código errado. Aguarde ${BLOQUEIO_CODIGO_MINUTOS} minutos e confira o código com a entidade.` });
+    }
     const r = await client.query(
       `UPDATE lotes SET status = 'entregue'
         WHERE id = $1 AND doador_id = $2 AND status = 'reservado' AND codigo = $3
@@ -417,10 +468,25 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
       [id, req.usuario.id, codigo, TOLERANCIA_MINUTOS]
     );
     if (!r.rows.length) {
+      const status = travado?.status;
+      // Código errado numa reserva ativa: conta para o bloqueio (a sequência recomeça após 15 min sem erro).
+      if (status === 'reservado' && travado.codigo !== codigo) {
+        const f = await client.query(
+          `UPDATE lotes
+              SET tentativas_codigo = CASE WHEN ultima_falha_codigo > now() - make_interval(mins => $2)
+                                           THEN tentativas_codigo + 1 ELSE 1 END,
+                  ultima_falha_codigo = now()
+            WHERE id = $1 RETURNING tentativas_codigo`,
+          [id, BLOQUEIO_CODIGO_MINUTOS]
+        );
+        await client.query('COMMIT');
+        const restantes = MAX_TENTATIVAS_CODIGO - f.rows[0].tentativas_codigo;
+        return res.status(400).json({ erro: restantes > 0
+          ? `Código inválido. Restam ${restantes} tentativa(s) antes de um bloqueio de ${BLOQUEIO_CODIGO_MINUTOS} minutos.`
+          : `Código inválido. Novas tentativas ficam bloqueadas por ${BLOQUEIO_CODIGO_MINUTOS} minutos.` });
+      }
       // Lote do próprio doador expirado ou com a reserva liberada: conflito de estado (409).
-      const atual = await client.query('SELECT status FROM lotes WHERE id = $1 AND doador_id = $2', [id, req.usuario.id]);
       await client.query('ROLLBACK');
-      const status = atual.rows[0]?.status;
       if (status === 'expirado')
         return res.status(409).json({ erro: 'Este lote expirou e não pode mais ter a retirada confirmada.' });
       if (status === 'disponivel')
@@ -463,6 +529,69 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
   } finally {
     client.release();
   }
+}));
+
+// A receptora desiste da reserva: o lote volta na hora para as demais entidades do raio, sem esperar
+// a janela vencer. O doador é avisado; as outras receptoras recebem "disponível novamente".
+app.put('/lotes/:id/cancelar-reserva', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  validar.corpo(req.body ?? {}, []);
+  await atualizarStatus();
+  const r = await pool.query(
+    `WITH liberados AS (
+       UPDATE lotes l
+          SET status = 'disponivel', reservado_por = NULL, reservado_em = NULL, codigo = NULL,
+              janela_inicio = NULL, janela_fim = NULL
+        WHERE l.id = $1 AND l.status = 'reservado' AND l.reservado_por = $2
+       RETURNING l.id, l.doador_id, l.alimento, l.quantidade_kg, l.validade, l.retirada_ate
+     ), evento AS (
+       INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'reserva_cancelada', $2 FROM liberados
+     ), aviso AS (
+       INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem)
+       SELECT o.doador_id, o.id, 'reserva_cancelada', false,
+              u.nome || ' desistiu da reserva do lote: ' || o.alimento || '. Ele voltou a ficar disponível.'
+         FROM liberados o JOIN usuarios u ON u.id = $2
+       RETURNING ${COLUNAS_NOTIFICACAO}
+     ), ${notificarReceptoras('lote_liberado', 'liberados', 'Lote disponível novamente', '$3',
+       'AND r.id <> $2 AND o.retirada_ate > now()')}
+     SELECT id, (SELECT COALESCE(json_agg(x), '[]'::json)
+                   FROM (SELECT * FROM aviso UNION ALL SELECT * FROM notificadas) x) AS notificacoes
+       FROM liberados`,
+    [id, req.usuario.id, RAIO_METROS]
+  );
+  if (!r.rows.length) return res.status(409).json({ erro: 'Você não tem reserva ativa neste lote.' });
+  res.json({ ok: true });
+  tempoReal.publicar(r.rows[0].notificacoes);
+}));
+
+// O doador retira a oferta (disponível ou reservada). Se havia reserva, a receptora é avisada.
+// O lote cancelado sai das listas e não entra na TEC (não é falha de coleta); o evento fica no histórico.
+app.put('/lotes/:id/cancelar', autenticar, exigirPerfil('doador'), rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  validar.corpo(req.body ?? {}, []);
+  await atualizarStatus();
+  const r = await pool.query(
+    `WITH cancelados AS (
+       UPDATE lotes l SET status = 'cancelado', codigo = NULL
+        WHERE l.id = $1 AND l.doador_id = $2 AND l.status IN ('disponivel','reservado')
+       RETURNING l.id, l.alimento, l.reservado_por AS receptora
+     ), evento AS (
+       INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'cancelado', $2 FROM cancelados
+     ), notificadas AS (
+       INSERT INTO notificacoes (usuario_id, lote_id, tipo, urgente, mensagem)
+       SELECT c.receptora, c.id, 'lote_cancelado', true,
+              d.nome || ' cancelou o lote: ' || c.alimento || '. Sua reserva foi desfeita; não é preciso ir retirar.'
+         FROM cancelados c JOIN usuarios d ON d.id = $2
+        WHERE c.receptora IS NOT NULL
+       RETURNING ${COLUNAS_NOTIFICACAO}
+     )
+     SELECT id, ${NOTIFICACOES_JSON} AS notificacoes FROM cancelados`,
+    [id, req.usuario.id]
+  );
+  if (!r.rows.length)
+    return res.status(409).json({ erro: 'Só é possível cancelar um lote seu que esteja disponível ou reservado.' });
+  res.json({ ok: true });
+  tempoReal.publicar(r.rows[0].notificacoes);
 }));
 
 // Foto do lote (L03): só o doador dono ou a receptora que pode ver o lote (a mesma regra da listagem:
@@ -631,7 +760,7 @@ app.use((erro, req, res, next) => {
     return res.status(400).json({ erro: 'URL inválida. Confira o identificador informado.' });
   if (erro.type === 'entity.parse.failed')
     return res.status(400).json({ erro: 'JSON malformado. Envie um objeto JSON válido.' });
-  if (erro.type === 'entity.too.large' && req.method === 'POST' && req.path === '/lotes')
+  if (erro.type === 'entity.too.large' && ehPublicarLote(req))
     return res.status(400).json({ erro: 'A requisição é grande demais. A foto pode ter no máximo 400 KB.' });
   if (erro.type === 'entity.too.large' && req.method === 'PUT' && req.path === '/perfil/comprovante')
     return res.status(400).json({ erro: 'A requisição é grande demais. O comprovante pode ter no máximo 1 MB.' });

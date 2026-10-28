@@ -29,6 +29,8 @@ Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXE
 - Cadastro e login (JWT + bcrypt) de doadores e entidades receptoras, com CNPJ validado por dígito verificador.
 - Doador publica lotes com horário limite de retirada (obrigatório, até o fim do dia da validade) e foto opcional (reduzida no navegador, JPEG/PNG de até 400 KB); a entidade receptora vê os lotes num raio de 10 km (PostGIS), ordenados por validade e distância, com miniatura e "retirar até dd/mm hh:mm".
 - Reserva com janela de retirada (até 2 h, dentro do horário limite do lote) e código de 6 dígitos; só a primeira entidade consegue reservar.
+- A entidade pode desistir da reserva: o lote volta na hora para as outras ONGs do raio (que são avisadas) e o doador recebe aviso. O doador pode cancelar um lote disponível ou reservado; havendo reserva, a ONG recebe aviso urgente. Lote cancelado sai das listas e não conta na TEC.
+- Proteções contra adivinhação: 5 códigos de retirada errados seguidos bloqueiam a confirmação daquele lote por 15 min; 10 logins errados na mesma conta (ou 50 no mesmo IP) em 15 min dão 429. A contagem de login fica em memória e zera ao reiniciar o servidor.
 - Ciclo de vida: lote vencido, ou ainda disponível depois do horário limite de retirada, vira `expirado`; reserva não retirada após a janela (mais tolerância) volta a `disponivel`.
 - QR Code de retirada (link para o app com lote e código preenchidos) e confirmação pelo doador com checklist sanitário.
 - Comprovante digital com hash SHA-256 e página pública de verificação (`/verificar/:hash`). Não é certificado ICP-Brasil.
@@ -103,7 +105,7 @@ node test/carga.mjs
 
 **Recria integralmente o banco descartável** com `db/init.sql`; não executar junto com testes ou demo no mesmo banco. A guarda recusa banco de desenvolvimento/produção antes de conectar. Inicia e encerra seu próprio servidor de teste na porta 3101; recusa porta ocupada. Não acessa VPS nem lê `.env`.
 
-Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisições medidas), com duas ONGs sintéticas alternadas. Salva média, p95, status, erros inesperados e unicidade também conferida no banco em [resultado-carga.md](docs/testes/resultado-carga.md). Conflitos 409 são esperados: uma reserva vence e as outras são recusadas. É medição local de uma execução, sem garantia de capacidade em produção. O script histórico `docs/testes/e2e-api.mjs` antecede os contratos atuais; a suíte vigente é `npm test`.
+Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisições medidas), com duas ONGs sintéticas alternadas. Salva média, p95, status, erros inesperados e unicidade também conferida no banco em [resultado-carga.md](docs/testes/resultado-carga.md). Conflitos 409 são esperados: uma reserva vence e as outras são recusadas. É medição local de uma execução, sem garantia de capacidade em produção. A suíte oficial é `npm test`. `docs/testes/e2e-api.mjs` é uma fumaça manual (55 verificações) contra um servidor já rodando (`E2E_URL`, padrão `http://localhost:3000`); ela cria dados, então use só banco descartável recém-criado.
 
 ## API
 | Método | Rota | Acesso |
@@ -117,7 +119,9 @@ Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisi�
 | GET | /lotes/:id/foto | doador dono ou receptora que pode ver o lote |
 | PUT | /lotes/:id/reservar | receptora |
 | GET | /lotes/:id/qrcode | receptora que reservou |
-| PUT | /lotes/:id/confirmar-retirada | doador |
+| PUT | /lotes/:id/confirmar-retirada | doador (5 códigos errados → bloqueio de 15 min, 429) |
+| PUT | /lotes/:id/cancelar-reserva | receptora que reservou (lote volta a disponível) |
+| PUT | /lotes/:id/cancelar | doador dono, lote disponível ou reservado |
 | GET | /doacoes | autenticado |
 | GET | /indicadores | autenticado (painel global: kg, refeições, CO₂e, água, entidades, TMR e TEC com metas) |
 | GET | /indicadores/meus | autenticado (os mesmos números, só do próprio usuário) |

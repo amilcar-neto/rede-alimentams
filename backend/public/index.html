@@ -94,6 +94,11 @@
   .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; }
   .campos div { padding: 4px 0; border-bottom: 1px solid var(--borda); font-size: .92rem; }
   .campos b { display: block; color: var(--suave); font-weight: 600; font-size: .78rem; }
+  .confirmacao { margin-top: 8px; padding: 8px; border: 1px solid #ffcdd2; background: #fff8f8; border-radius: 6px; font-size: .9rem; }
+  .confirmacao .acao { justify-content: flex-start; }
+  button.perigo { background: var(--verm); }
+  button.perigo:hover { background: #8e0000; }
+  .link.perigo { background: none; color: var(--verm); }
   .oculto { display: none !important; }
 </style>
 </head>
@@ -115,8 +120,8 @@
   <section id="telaAuth" class="painel login">
     <div id="boxLogin">
       <h2>Entrar</h2>
-      <label for="lEmail">E-mail</label><input id="lEmail" type="email" autocomplete="username">
-      <label for="lSenha">Senha</label><input id="lSenha" type="password" autocomplete="current-password">
+      <label for="lEmail">E-mail</label><input id="lEmail" type="email" autocomplete="username" onkeydown="if (event.key === 'Enter') entrar()">
+      <label for="lSenha">Senha</label><input id="lSenha" type="password" autocomplete="current-password" onkeydown="if (event.key === 'Enter') entrar()">
       <div id="erroLogin"></div>
       <p><button onclick="entrar()">Entrar</button></p>
       <p class="meta">Contas de demonstração (senha 123456):</p>
@@ -139,7 +144,7 @@
       <label for="cResponsavel">Responsável</label><input id="cResponsavel" maxlength="200" autocomplete="name">
       <label for="cTelefone">Telefone do responsável</label><input id="cTelefone" placeholder="(67) 99999-9999" inputmode="tel" maxlength="20" oninput="mascararTelefone(this)" autocomplete="tel">
       <label for="cEmail">E-mail</label><input id="cEmail" type="email" maxlength="254">
-      <label for="cSenha">Senha (mínimo 6 caracteres)</label><input id="cSenha" type="password" maxlength="72">
+      <label for="cSenha">Senha (mínimo 6 caracteres)</label><input id="cSenha" type="password" maxlength="72" onkeydown="if (event.key === 'Enter') cadastrar()">
       <div id="boxComprovante" class="oculto">
         <label for="cComprovante">Comprovante de entidade sem fins lucrativos (opcional · PDF, JPEG ou PNG até 1 MB)</label>
         <input id="cComprovante" type="file" accept="application/pdf,image/jpeg,image/png">
@@ -413,6 +418,7 @@ function tagValidade(dias) {
   return `<span class="tag t-ok">válido ${dias} dias</span>`;
 }
 const dataBR = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
+function kgBR(n) { return Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
 
 // "dd/mm hh:mm" a partir de AAAA-MM-DDTHH:MM (horário de Campo Grande).
 function textoRetirada(iso) {
@@ -441,7 +447,7 @@ function cartaoLote(l, doador) {
   const reservado = l.status === 'reservado', expirado = l.status === 'expirado';
   let rodape = '';
   if (doador && expirado) {
-    rodape = '<div class="acao"><span class="tag t-hoje">expirado</span></div><div class="meta">O prazo de validade passou sem retirada.</div>';
+    rodape = '<div class="acao"><span class="tag t-hoje">expirado</span></div><div class="meta">O prazo de validade ou o horário limite de retirada passou sem que o lote fosse retirado.</div>';
   } else if (doador && reservado) {
     rodape = `<div class="meta"><b>${esc(l.reservado_por_nome)}</b> retira entre <b>${esc(textoJanela(l))}</b></div>
       <fieldset class="sanitario"><legend>Checklist sanitário obrigatório</legend>
@@ -450,15 +456,17 @@ function cartaoLote(l, doador) {
         <label><input type="checkbox" id="val${l.id}">Dentro da validade</label>
       </fieldset>
       <div class="acao"><input id="cod${l.id}" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos" aria-label="Código de retirada">
-      <button class="azul" onclick="confirmar(${l.id})">Confirmar retirada</button></div>`;
+      <button class="azul" onclick="confirmar(${l.id})">Confirmar retirada</button></div>
+      ${botaoCancelar(l.id, 'lote')}`;
   } else if (doador) {
-    rodape = '<div class="acao"><span class="tag t-ok">disponível</span></div>';
+    rodape = `<div class="acao"><span class="tag t-ok">disponível</span></div>${botaoCancelar(l.id, 'lote')}`;
   } else if (reservado) {
     rodape = `<div class="codigo">Código de retirada: <b>${esc(l.codigo)}</b></div>
       <img class="qr-retirada" id="qr${l.id}" alt="QR de retirada; use o código numérico se a imagem não carregar">
       <div class="meta">O doador pode ler o QR com a câmera do celular para abrir a confirmação preenchida.</div>
       <div class="acao"><span class="tag t-res">reservado por você</span></div>
-      <div class="meta">Retire entre <b>${esc(textoJanela(l))}</b> e apresente este código ao doador. Passada a janela (mais 30 min de tolerância), a reserva é liberada para outra entidade.</div>`;
+      <div class="meta">Retire entre <b>${esc(textoJanela(l))}</b> e apresente este código ao doador. Passada a janela (mais ${Number(l.tolerancia_minutos ?? 30)} min de tolerância), a reserva é liberada para outra entidade.</div>
+      ${botaoCancelar(l.id, 'reserva')}`;
   } else {
     const ate = l.retirada_ate ? `, '${esc(l.retirada_ate)}'` : '';
     rodape = `<div id="res${l.id}"><div class="acao">${tagValidade(l.dias)}<button onclick="abrirReserva(${l.id}, '${esc(l.validade)}'${ate})">Reservar retirada</button></div></div>`;
@@ -467,7 +475,7 @@ function cartaoLote(l, doador) {
     ${l.tem_foto ? `<img class="miniatura oculto" id="foto${Number(l.id)}" alt="Foto do lote: ${esc(l.alimento)}">` : ''}
     <div class="topo"><div><h3>${esc(l.alimento)}</h3>
       <div class="meta">${doador ? esc(l.categoria) : esc(l.doador)}</div></div>
-      <div class="qtd">${Number(l.quantidade_kg)}<small style="font-size:.7rem;color:var(--suave)"> kg</small></div></div>
+      <div class="qtd">${kgBR(l.quantidade_kg)}<small style="font-size:.7rem;color:var(--suave)"> kg</small></div></div>
     ${doador ? '' : `<div class="meta">Bairro: <b>${esc(l.bairro)}</b> · ${l.distancia_km} km de você</div>`}
     <div class="meta">${esc(l.categoria)} · válido até <b>${dataBR(l.validade)}</b></div>
     ${l.retirada_ate ? `<div class="meta">retirar até <b>${esc(textoRetirada(l.retirada_ate))}</b></div>` : ''}
@@ -575,6 +583,38 @@ async function confirmar(id) {
   } catch (e) { $('aviso').innerHTML = `<div class="msg erro">${esc(e.message)}</div>`; }
 }
 
+// Cancelamento em dois passos, sem diálogo do navegador: o botão abre a confirmação no próprio cartão.
+const CANCELAMENTO = {
+  lote: { botao: 'Cancelar lote', pergunta: 'Cancelar este lote? Ele deixa de ser oferecido e, se estiver reservado, a entidade é avisada.',
+    confirmar: 'Sim, cancelar lote', rota: 'cancelar', ok: 'Lote cancelado.' },
+  reserva: { botao: 'Desistir da reserva', pergunta: 'Desistir desta reserva? O lote volta na hora para as outras entidades e o doador é avisado.',
+    confirmar: 'Sim, desistir', rota: 'cancelar-reserva', ok: 'Reserva cancelada. O lote voltou a ficar disponível para outras entidades.' },
+};
+
+function botaoCancelar(id, tipo) {
+  return `<div id="canc${Number(id)}"><div class="acao"><button class="link perigo" onclick="perguntarCancelamento(${Number(id)}, '${tipo}')">${CANCELAMENTO[tipo].botao}</button></div></div>`;
+}
+
+function perguntarCancelamento(id, tipo) {
+  const c = CANCELAMENTO[tipo];
+  $('canc' + id).innerHTML = `<div class="confirmacao" role="group" aria-label="${esc(c.botao)}">${esc(c.pergunta)}
+    <div class="acao"><button class="perigo" onclick="cancelar(${Number(id)}, '${tipo}')">${esc(c.confirmar)}</button>
+    <button class="link" onclick="irPara('lotes')">Voltar</button></div></div>`;
+}
+
+async function cancelar(id, tipo) {
+  const c = CANCELAMENTO[tipo];
+  try {
+    await api('PUT', `/lotes/${id}/${c.rota}`);
+    await irPara('lotes');
+    msg('aviso', c.ok, 'ok');
+  } catch (e) {
+    if (e.status === 401) return;
+    await irPara('lotes');
+    msg('aviso', e.message);
+  }
+}
+
 function telaPublicar() {
   const amanha = dataAmanha();
   $('conteudo').innerHTML = `<div class="painel" style="max-width:560px">
@@ -676,7 +716,7 @@ async function telaDoacoes() {
   const d = await api('GET', '/doacoes');
   if (!d.length) { $('conteudo').innerHTML = '<div class="vazio">Nenhuma doação concluída ainda.</div>'; return; }
   $('conteudo').innerHTML = `<div id="erroComprovante"></div><div class="rolagem"><table><thead><tr><th>Alimento</th><th>Doador</th><th>Qtd</th><th>Entidade</th><th>Data</th><th>Código</th><th>Comprovante</th></tr></thead><tbody>` +
-    d.map((x) => `<tr><td>${esc(x.alimento)}</td><td>${esc(x.doador)}</td><td>${Number(x.quantidade_kg)} kg</td><td>${esc(x.entidade)}</td><td>${esc(x.data)}</td><td>${esc(x.codigo)}</td><td><button onclick="abrirComprovante(${x.id})">Abrir / imprimir</button></td></tr>`).join('') +
+    d.map((x) => `<tr><td>${esc(x.alimento)}</td><td>${esc(x.doador)}</td><td>${kgBR(x.quantidade_kg)} kg</td><td>${esc(x.entidade)}</td><td>${esc(x.data)}</td><td>${esc(x.codigo)}</td><td><button onclick="abrirComprovante(${x.id})">Abrir / imprimir</button></td></tr>`).join('') +
     `</tbody></table></div>`;
 }
 
@@ -763,7 +803,7 @@ function mostrarAviso(texto, urgente, acao) {
 // Recarrega a lista sem apagar um formulário aberto ou um campo em edição.
 function recarregarLista() {
   if (!usuario || abaAtual !== 'lotes') return false;
-  if (document.querySelector('#conteudo .janela') || document.activeElement?.closest?.('#conteudo')) return false;
+  if (document.querySelector('#conteudo .janela, #conteudo .confirmacao') || document.activeElement?.closest?.('#conteudo')) return false;
   telaLotes().catch(() => {});
   return true;
 }

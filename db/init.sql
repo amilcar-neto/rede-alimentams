@@ -40,10 +40,14 @@ CREATE TABLE lotes (
   quantidade_kg  NUMERIC(10,2) NOT NULL CHECK (quantidade_kg > 0),
   validade       DATE NOT NULL,
   status         TEXT NOT NULL DEFAULT 'disponivel'
-                 CHECK (status IN ('disponivel','reservado','entregue','expirado')),
+                 CHECK (status IN ('disponivel','reservado','entregue','expirado','cancelado')),
   reservado_por  INT REFERENCES usuarios(id),
   reservado_em   TIMESTAMPTZ,
   codigo         CHAR(6),
+  -- Erros de código na confirmação da reserva atual: 5 erros seguidos bloqueiam novas tentativas por
+  -- 15 min (impede adivinhar os 10^6 códigos). Zerados a cada nova reserva.
+  tentativas_codigo  INT NOT NULL DEFAULT 0,
+  ultima_falha_codigo TIMESTAMPTZ,
   janela_inicio  TIMESTAMPTZ,
   janela_fim     TIMESTAMPTZ,
   -- Horário limite de retirada (L03): até o fim do dia da validade; a janela da reserva respeita este limite.
@@ -64,7 +68,9 @@ CREATE INDEX idx_lotes_status ON lotes (status);
 CREATE TABLE eventos_lote (
   id          SERIAL PRIMARY KEY,
   lote_id     INT NOT NULL REFERENCES lotes(id),
-  tipo        TEXT NOT NULL CHECK (tipo IN ('publicado','reservado','liberado','expirado','entregue')),
+  -- reserva_cancelada: a ONG desistiu (usuario_id = ONG); cancelado: o doador retirou a oferta.
+  tipo        TEXT NOT NULL CHECK (tipo IN ('publicado','reservado','liberado','expirado','entregue',
+                                            'reserva_cancelada','cancelado')),
   usuario_id  INT REFERENCES usuarios(id),
   criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -77,7 +83,8 @@ CREATE TABLE notificacoes (
   id          SERIAL PRIMARY KEY,
   usuario_id  INT NOT NULL REFERENCES usuarios(id),
   lote_id     INT NOT NULL REFERENCES lotes(id) ON DELETE CASCADE,
-  tipo        TEXT NOT NULL CHECK (tipo IN ('lote_publicado','lote_liberado','lote_reservado','retirada_confirmada')),
+  tipo        TEXT NOT NULL CHECK (tipo IN ('lote_publicado','lote_liberado','lote_reservado','retirada_confirmada',
+                                            'reserva_cancelada','lote_cancelado')),
   urgente     BOOLEAN NOT NULL DEFAULT false,
   mensagem    TEXT NOT NULL,
   lida_em     TIMESTAMPTZ,

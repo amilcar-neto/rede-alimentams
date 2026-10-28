@@ -32,6 +32,8 @@ Se o celular/rede não estiver pronto, executar a alternativa **declaradamente s
 - Raio: `longe@demo.com` → “Lotes disponíveis”, sem lotes próximos. Não possui painel administrativo.
 - Reserva próxima de expirar: `pao@demo.com` e `esperanca@demo.com`, lote 21 “Bolos e roscas”, código sintético `482915`. Janela termina cerca de 25 min após a criação do banco; liberação só após janela + tolerância (30 min por padrão) e consulta de lotes. Não esperar esse prazo na demo nem modificar timestamps manualmente para simular evidência humana.
 - L06: mostrar cadastro com endereço, responsável, telefone e aceite de termos; em Esperança, “Meus números” permite enviar/abrir comprovante de entidade PDF/JPEG/PNG até 1 MB. Usar somente arquivo sintético. Textos legais [VERIFICAR]; contato [GRUPO]. Não afirmar revisão jurídica ou aprovação administrativa.
+- Desistência e cancelamento: Amambai reserva um lote do seed e clica “Desistir da reserva” → confirma no próprio cartão. O lote volta para Esperança (aviso “disponível novamente”) e o doador recebe aviso. Em seguida, o doador clica “Cancelar lote” → confirma; o lote some das listas. Se havia reserva, a ONG recebe aviso urgente.
+- Código errado: no doador, digitar código errado mostra quantas tentativas restam; após 5 erros, a confirmação daquele lote fica bloqueada por 15 min. Não fazer isso no lote do Cenário 1 durante a demo.
 - Cenário 3: apresentar o [resultado de carga](testes/resultado-carga.md) gerado localmente; não executar a carga enquanto a demo estiver no mesmo banco.
 
 ## Registro humano pendente
