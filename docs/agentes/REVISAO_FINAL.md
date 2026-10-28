@@ -1,5 +1,7 @@
 # Revisão FINAL — baseline..HEAD
 
+> **Retomada em 28/10/2026:** revisão revalidada no HEAD `c489df014c6e4005f105de2ac6cfb7f4fb9d4856`. Resultado **continue**; F1–F3 permanecem necessários. A seção final deste arquivo registra as verificações novas e distingue as evidências históricas preservadas abaixo. `block_reason: permission_denied` preserva a negativa anterior do Docker, sem reclassificá-la ou contorná-la.
+
 Data: 28/10/2026. Ferramenta: codex. Papel: revisor independente, executor único, sem subagentes. Modelo solicitado/efetivo e esforço: `nao_verificado` pelo cliente. Branch recebida: `lote/FINAL`.
 
 **Resultado: continue — três correções de prioridade média necessárias antes do aceite final.** Não foi identificado achado crítico/alto no produto no escopo examinado. A suíte verde não encerra os achados F1–F3. A revisão não autoriza prints definitivos, deploy, entrega ou aprovação humana.
@@ -109,3 +111,39 @@ Permanecem humanos [GRUPO]: validação jurídica dos textos [VERIFICAR], contat
 ## Próximo passo
 
 O controlador deve encaminhar **F1 (`backend/src/tempo-real.js:45` e `backend/public/index.html:791`), F2 (`backend/public/index.html:140`) e F3 (`docs/DEPLOY.md:103`–`112`, com atualização de `:177`)** a uma fase de correção autorizada. Preservar os achados e regressões existentes, executar `npm test` em backend/ e retornar o novo commit à revisão. Revalidar limite de sessões, integridade do telefone e procedimento de restauração antes do aceite final. Não promover a conferência visual pendente a realizada; o grupo executará o roteiro acima em acesso próprio autorizado. Harmonização das instruções do controlador requer tarefa separada do responsável, não mudanças pelo executor deste lote.
+
+## Retomada da revisão — HEAD c489df0 (28/10/2026)
+
+Esta seção é o resultado mais recente. O conteúdo anterior é preservado como evidência da primeira revisão, incluindo a negativa de acesso à configuração do Docker e a alternativa estática já tentada. Nenhuma negativa foi reclassificada como indisponibilidade. Não houve nova tentativa de acesso ao arquivo negado, alteração de configuração ou elevação.
+
+### Versão e conferência independente
+
+- Branch recebida e mantida: `lote/FINAL`; árvore limpa no início. Baseline confirmada: `cf88651de874b8c1b0c0baaebf87f02f9e9e29c0`; HEAD: `c489df014c6e4005f105de2ac6cfb7f4fb9d4856`; main: `7d12d35224e404023c4a0bd5b77b6ecdcadfcd35`.
+- **Atualização da informação histórica acima:** agora `main..HEAD` contém somente este relatório (111 linhas acrescentadas pelo commit `c489df0`). Nenhum código, teste, schema ou roteiro mudou desde o commit integrado já revisado. O intervalo funcional continua sendo `baseline..HEAD`; diff acumulado atual: 62 arquivos, 7.923 inserções e 175 remoções.
+- Relidos AGENTS.md, seção Revisão final do plano, LOG e relatório existente. `docs/agentes/progresso/FINAL.md` continua inexistente; o checklist fica exclusivamente neste relatório, conforme autorização de escrita desta fase.
+- Examinados novamente o diff acumulado de backend/schema e o contexto de autenticação, autorização, reserva/expiração, confirmação transacional, anexos, QR/hash e WebSocket. Conferidos os pontos dos achados com as revisões L05/L06/L07 e a cobertura dos testes; README, roteiros de demo/prints e resultado histórico de carga continuam compatíveis com os limites registrados. Nenhum novo achado crítico/alto identificado no escopo examinado; isso não dispensa F1–F3.
+
+### Verificações desta retomada
+
+- **`npm.cmd test`, em backend/: exit code 0; 157 testes, 157 pass, 0 fail/cancelled/skipped/todo; duration_ms 38298.8134.** Runner leu a guarda de reset e recriou exclusivamente `alimentams_test` de `db/init.sql`; iniciou o servidor da suíte em 3100 e encerrou seus filhos. Não houve edição de testes. Sondagem TCP posterior em 127.0.0.1 confirmou **ECONNREFUSED em 3100 e 3101**.
+- **F1 reproduzido novamente sem rede/navegador:** módulo real `tempo-real.js` em VM, JWT sintético válido para um mesmo ID, funções reais `iniciarTempoReal`/`fecharConexao` extraídas do front e transporte/temporizadores simulados. Seis clientes e doze callbacks de reconexão resultaram em **18 autenticações, 13 fechamentos, 25 consultas a notificações, cinco conexões ativas e um callback ainda pendente**. As doze esperas foram **1.000 ms**. Evidência confirma a combinação `tempo-real.js:45–48` com `index.html:791–805`; os testes atuais exercitam reconexão, mas não estabilização com seis sessões.
+- **F2 reproduzido novamente sem cadastro/navegador:** atributo real `maxlength="16"` aplicado por truncamento simulado antes da função real `mascararTelefone`. Entrada `+55 67 99999-0006` virou **`(67) 9999-9000`**; validador real do servidor aceitou **`6799999000`**, diferente do pretendido **`67999990006`**. Evidência confirma `index.html:140`, `:196–202` e envio em `:267`. O teste de máscara vigente não aplica a restrição HTML.
+- **F3 reconferido estaticamente:** `docs/DEPLOY.md:103–112` ainda restaura com `psql` sem `ON_ERROR_STOP`, no serviço cujo primeiro boot monta `db/init.sql` (`docker-compose.prod.yml:14`), sem passos para preparar o destino vazio. Schema cria tabelas e popula seed. Não foram executados dump/restauração nem inferida perda de dados observada. A divergência documental de `docs/DEPLOY.md:177` também permanece.
+- `git diff --check baseline..HEAD` voltou a apontar whitespace histórico em `progresso/L05.md:56,59,61,64` e `docs/testes/L01-execucao.txt:80`. Não declarado verde; achado cosmético preservado. A chamada agrupada terminou com código 0 porque seu último comando era leitura de log, o que não muda os diagnósticos do diff.
+- Carga não repetida: não houve mudança funcional desde a medição e o script sobrescreveria outro arquivo, vedado nesta fase. Os números de `resultado-carga.md` permanecem evidência histórica, não execução nova.
+- Tentativa de navegador nesta retomada: **`cua.getState()` retornou `browsers: []` e `Browsers: Error: The browser access host is unavailable`**. Skill computer-use lida. O inventário de apps não foi usado para contornar a negativa histórica de Edge. A ferramenta de execução disponível continua sem parâmetro `run_in_background`; nenhum servidor manual em 3000 foi iniciado e não houve servidor manual desta retomada a encerrar.
+- Não houve teste visual, captura, câmera, impressão, deploy, entrega, revisão jurídica ou aprovação humana nesta retomada. Ferramenta: codex; modelo efetivo/esforço não informados pelo cliente. Sem subagentes, outro executor, acesso ao VPS, mensagens, dados reais ou leitura de credenciais. Único arquivo escrito: este relatório; sem Git staging/commit/integração.
+
+### Checklist de retomada e encaminhamento
+
+- [x] Confirmar versão e ausência de mudança funcional desde a revisão anterior; reexaminar diff e contexto de risco.
+- [x] Executar suíte em banco descartável e verificar encerramento dos servidores de teste.
+- [x] Reproduzir F1/F2 com código real em memória e reconferir F3 no guia/schema.
+- [x] Preservar evidências válidas, negativas de acesso e distinção entre testes atuais e históricos.
+- [ ] Corrigir F1: distinguir limite de sessões e suspender a reconexão que perpetua expulsões, com regressão integrada de seis clientes (`backend/src/tempo-real.js:45–48`; `backend/public/index.html:791–805`).
+- [ ] Corrigir F2: permitir colagem completa dos formatos aceitos antes da máscara e testar a restrição do campo com dígitos enviados (`backend/public/index.html:140`, `:196–202`, `:267`).
+- [ ] Corrigir F3: documentar destino vazio reproduzível, interrupção em erro, verificação de restauração e limites reais da validação (`docs/DEPLOY.md:103–112`, `:177`; contexto `docker-compose.prod.yml:14`). Qualquer validação deve usar ambiente descartável e acesso próprio autorizado, sem contornar o Docker negado.
+- [ ] **Conferência visual humana PENDENTE**: executar exatamente os seis passos do roteiro humano acima e os 22 estados de `docs/ROTEIRO_PRINTS.md`, após correções. Diagnóstico atual registrado; pendência visual isolada não impede aceite conforme instrução expressa do usuário.
+- [ ] Grupo conclui as demais verificações humanas e documentais listadas acima, sem presumir aprovação, prints ou entrega.
+
+**Conclusão atual: continue.** As três correções médias continuam necessárias, sem justificativa de aceite que elimine seus impactos. Encaminhar a fase de correção autorizada, executar testes e devolver o novo commit à revisão. **`block_reason: permission_denied`** identifica a negativa de Docker já registrada e ainda sem validação completa; não é `tool_unavailable`. A falta de navegador não é a razão do `continue` e não foi usada para bloquear isoladamente o lote.
