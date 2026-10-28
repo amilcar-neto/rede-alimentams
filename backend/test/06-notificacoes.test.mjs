@@ -400,6 +400,32 @@ test('L05 front: JWT só no primeiro frame, aviso/contador escapados, central, r
   assert.ok(!aberta.fechado || aberta.onclose === null);
   assert.equal(el('contador').textContent, '0');
   assert.ok(el('central').classList.contains('oculto'));
+
+  // Limite de sessões (4001): a aba que cedeu a vaga não reconecta nem expulsa outra em ciclo.
+  vm.runInContext("token = 'jwt-secreto'; usuario = { perfil: 'receptora', nome: 'ONG' }", contexto);
+  contexto.iniciarTempoReal();
+  sockets.at(-1).onopen();
+  sockets.at(-1).onmessage({ data: JSON.stringify({ tipo: 'autenticado' }) });
+  const antes = sockets.length;
+  const reconexoesAntes = reconexoes().length;
+  sockets.at(-1).onclose({ code: 4001 });
+  assert.equal(reconexoes().length, reconexoesAntes, 'sem nova tentativa de reconexão');
+  assert.equal(sockets.length, antes);
+  assert.match(el('toast').innerHTML, /Tempo real suspenso/);
+  contexto.sair();
+});
+
+test('L05 sexta conexão da mesma conta fecha só a mais antiga com código 4001 próprio; as outras seguem entregando', async () => {
+  const sessoes = [];
+  for (let i = 0; i < 5; i++) sessoes.push(await conectar(esperanca));
+  const sexta = await conectar(esperanca);
+  await aguardar(() => sessoes[0].fechou, 2000, 'fechamento da conexão mais antiga');
+  assert.equal(sessoes[0].codigo, 4001, 'código distinto de 1008 (autenticação) para o front não reconectar');
+  await dormir(200);
+  for (const c of [...sessoes.slice(1), sexta]) assert.equal(c.fechou, null, 'as demais continuam abertas');
+  const id = await publicar(comper, dia(3));
+  for (const c of [...sessoes.slice(1), sexta]) await esperarEvento(c, 'lote_publicado', id);
+  for (const c of [...sessoes, sexta]) c.ws.close();
 });
 
 test('L05 encerra conexões de apoio', async () => {

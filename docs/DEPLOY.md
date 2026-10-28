@@ -97,22 +97,58 @@ bloqueada (firewall do VPS ou do provedor). Os logs do `caddy` mostram o motivo.
 
 ### 7. Backup e restauração
 
-Backup lógico com `pg_dump`:
+Backup lógico com `pg_dump`, gravado **fora do clone do repositório** (o arquivo contém
+dados de usuários e não deve ser versionado por engano):
 
 ```bash
+mkdir -p ~/backups && chmod 700 ~/backups
 docker compose -f docker-compose.prod.yml exec -T db \
-  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > backup-$(date +%F).sql
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > ~/backups/backup-$(date +%F).sql
 ```
 
-Guarde o arquivo fora do VPS (ele contém dados de usuários). Restauração em um banco
-vazio:
+Copie também o arquivo para fora do VPS.
 
-```bash
-docker compose -f docker-compose.prod.yml exec -T db \
-  sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"' < backup-AAAA-MM-DD.sql
-```
+**Restauração.** O serviço `db` já nasce com o `db/init.sql` aplicado (tabelas, triggers e
+dados de demonstração). Por isso o dump **não pode** ser aplicado em `$POSTGRES_DB` como
+está: haveria `already exists` e chaves duplicadas. O destino precisa ser um banco
+realmente vazio, criado antes, e o `psql` deve parar no primeiro erro
+(`-v ON_ERROR_STOP=1`).
 
-Teste a restauração em outro ambiente antes de depender dela.
+1. Ensaio, sem tocar no banco em uso: restaure em um banco novo e vazio dentro do mesmo
+   servidor.
+
+   ```bash
+   docker compose -f docker-compose.prod.yml exec -T db \
+     sh -c 'psql -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE restaura_teste"'
+   docker compose -f docker-compose.prod.yml exec -T db \
+     sh -c 'psql -U "$POSTGRES_USER" -d restaura_teste -v ON_ERROR_STOP=1' < ~/backups/backup-AAAA-MM-DD.sql
+   ```
+
+2. Verifique: as contagens do banco restaurado devem coincidir com as do banco original
+   (no momento do backup). Rode a mesma consulta nos dois, trocando o valor de `-d`
+   (`restaura_teste` e o nome de `$POSTGRES_DB`):
+
+   ```bash
+   docker compose -f docker-compose.prod.yml exec -T db \
+     sh -c 'psql -U "$POSTGRES_USER" -d restaura_teste -c "SELECT (SELECT count(*) FROM usuarios) AS usuarios, (SELECT count(*) FROM lotes) AS lotes, (SELECT count(*) FROM notificacoes) AS notificacoes"'
+   ```
+
+   Apague o banco de ensaio quando terminar:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml exec -T db \
+     sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE restaura_teste"'
+   ```
+
+3. Substituir o banco de produção **descarta os dados atuais** e exige decisão e
+   autorização do grupo [GRUPO]. Sequência: pare o `app` (`docker compose -f
+   docker-compose.prod.yml stop app`); no `psql -d postgres`, execute `DROP DATABASE` e
+   `CREATE DATABASE` de `"$POSTGRES_DB"`; restaure como no passo 1, apontando para
+   `"$POSTGRES_DB"`; verifique como no passo 2; só então inicie o `app` de novo
+   (`start app`).
+
+Este procedimento **não foi executado** pelos agentes (sem Docker/VPS nesta validação);
+o grupo deve ensaiá-lo em ambiente descartável antes de depender dele.
 
 ### 8. Atualizar a aplicação
 
@@ -174,5 +210,7 @@ Seção de apoio ao relatório.
 - Nenhum VPS, DNS, certificado ou firewall foi acessado ou testado pelos agentes.
 - Testes locais cobrem `/saude`, cabeçalhos e a ausência de `5432:`/`3000:` publicados no
   compose de produção; não substituem a verificação do passo 5 no servidor real.
-- A sintaxe do compose e do Caddyfile não foi executada por `docker compose config` /
-  `caddy validate` nesta etapa; fazer na primeira subida.
+- O compose foi renderizado por `docker compose config` localmente na revisão do L07
+  (sem subir nada); na revisão final a leitura da configuração do Docker foi negada e não
+  foi repetida. O Caddyfile nunca passou por `caddy validate`; fazer na primeira subida.
+- Backup e restauração (passo 7) não foram executados; só revisados por leitura.

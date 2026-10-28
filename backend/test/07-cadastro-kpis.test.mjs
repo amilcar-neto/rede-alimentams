@@ -384,11 +384,18 @@ test('L06 front: formulário de cadastro tem os campos novos, o aceite com link 
 });
 
 test('L06 front: máscara do telefone, para fixo, celular e número colado com +55', () => {
-  const { contexto } = contextoFront();
+  const { contexto, html } = contextoFront();
   const mascara = (valor) => { const input = { value: valor }; contexto.mascararTelefone(input); return input.value; };
   assert.equal(mascara('67999990006'), '(67) 99999-0006');
   assert.equal(mascara('6733330001'), '(67) 3333-0001');
   assert.equal(mascara('+55 67 99999-0006'), '(67) 99999-0006');
+  // O navegador aplica o maxlength do campo antes do oninput: a colagem completa com +55 precisa caber.
+  const maxlength = Number(html.match(/id="cTelefone"[^>]*maxlength="(\d+)"/)[1]);
+  const cola = (valor) => mascara(valor.slice(0, maxlength));
+  assert.equal(cola('+55 67 99999-0006'), '(67) 99999-0006');
+  assert.equal(cola('+55 (67) 99999-0006'), '(67) 99999-0006');
+  assert.equal(cola('+55 67 3333-0001'), '(67) 3333-0001');
+  assert.equal(cola('5567999990006'), '(67) 99999-0006');
   assert.equal(mascara('679'), '(67) 9');
   assert.equal(mascara('67999'), '(67) 999');
   assert.equal(mascara('abc'), '');

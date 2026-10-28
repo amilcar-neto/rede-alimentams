@@ -137,7 +137,7 @@
       <label for="cEndereco">Endereço</label><input id="cEndereco" maxlength="250" placeholder="Rua, número e complemento" autocomplete="street-address">
       <label for="cBairro">Bairro</label><select id="cBairro"></select>
       <label for="cResponsavel">Responsável</label><input id="cResponsavel" maxlength="200" autocomplete="name">
-      <label for="cTelefone">Telefone do responsável</label><input id="cTelefone" placeholder="(67) 99999-9999" inputmode="tel" maxlength="16" oninput="mascararTelefone(this)" autocomplete="tel">
+      <label for="cTelefone">Telefone do responsável</label><input id="cTelefone" placeholder="(67) 99999-9999" inputmode="tel" maxlength="20" oninput="mascararTelefone(this)" autocomplete="tel">
       <label for="cEmail">E-mail</label><input id="cEmail" type="email" maxlength="254">
       <label for="cSenha">Senha (mínimo 6 caracteres)</label><input id="cSenha" type="password" maxlength="72">
       <div id="boxComprovante" class="oculto">
@@ -801,6 +801,13 @@ function iniciarTempoReal() {
     ws = null;
     // Token recusado/expirado: a consulta HTTP decide se a sessão acabou (401 → sair).
     if (ev.code === 1008) carregarNotificacoes();
+    // 4001: esta aba cedeu a vaga a outra da mesma conta. Reconectar expulsaria uma aba em ciclo; as
+    // notificações seguem disponíveis pelo sino e pela consulta HTTP até a página ser recarregada.
+    if (ev.code === 4001) {
+      carregarNotificacoes();
+      mostrarAviso('Tempo real suspenso: esta conta tem muitas abas abertas. Feche outras abas e recarregue a página.', false);
+      return;
+    }
     if (!token) return;
     esperaWs = setTimeout(iniciarTempoReal, Math.min(30000, 1000 * 2 ** tentativasWs));
     tentativasWs += 1;
