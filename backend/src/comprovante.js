@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { isIP } = require('net');
 const QRCode = require('qrcode');
 const { corpo, ErroValidacao } = require('./validacao');
 
@@ -26,20 +27,47 @@ function canonico(valor) {
 const hashDe = (dados) => crypto.createHash('sha256').update(canonico(dados), 'utf8').digest('hex');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+function hostnameValido(hostname) {
+  if (hostname.startsWith('[')) return isIP(hostname.slice(1, -1)) === 6;
+  const nome = hostname.replace(/\.$/, '');
+  return nome.length <= 253 && nome.split('.').every((parte) =>
+    parte.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(parte));
+}
+
+// Limite conservador em bytes, abaixo da capacidade do QR em modo byte/M.
+// Erro de configuração não deve ser apresentado como entrada inválida do usuário.
+function limitarURL(url) {
+  if (Buffer.byteLength(url, 'utf8') > 1024) {
+    if (process.env.BASE_URL) throw new Error('BASE_URL excede o limite de 1024 bytes do link QR.');
+    throw new ErroValidacao('Endereço da requisição inválido.');
+  }
+  return url;
+}
+
 function baseURL(req) {
   const configurada = process.env.BASE_URL;
+  const host = configurada ? null : req.get('host');
+  // Host deve conter somente autoridade, sem caminho, credenciais ou espaços.
+  if (!configurada && (typeof host !== 'string' || host.length > 260
+      || !/^(?:\[[0-9a-f:.]+\]|[a-z0-9.-]+)(?::[0-9]{1,5})?$/i.test(host)))
+    throw new ErroValidacao('Endereço da requisição inválido.');
+  const entrada = limitarURL(configurada || `${req.protocol}://${host}`);
   let base;
-  try { base = new URL(configurada || `${req.protocol}://${req.get('host')}`); }
+  try { base = new URL(entrada); }
   catch (e) {
     if (configurada) throw new Error('BASE_URL inválida.');
     throw new ErroValidacao('Endereço da requisição inválido.');
   }
-  if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
-    if (configurada) throw new Error('BASE_URL deve ser uma URL HTTP(S) sem credenciais, query ou fragmento.');
+  if (!['http:', 'https:'].includes(base.protocol) || !hostnameValido(base.hostname)
+      || (!configurada && !hostnameValido(host.replace(/:\d+$/, '')))
+      || base.username || base.password || base.search || base.hash) {
+    if (configurada) throw new Error('BASE_URL deve ser uma URL HTTP(S) com hostname válido, sem credenciais, query ou fragmento.');
     throw new ErroValidacao('Endereço da requisição inválido.');
   }
-  return base.href.replace(/\/$/, '');
+  return limitarURL(base.href.replace(/\/$/, ''));
 }
+
+const urlQR = (req, caminho) => limitarURL(baseURL(req) + caminho);
 
 const png = (url) => QRCode.toBuffer(url, { type: 'png', width: 280, margin: 4, errorCorrectionLevel: 'M' });
 const dataLocal = (iso) => new Intl.DateTimeFormat('pt-BR', {
@@ -81,4 +109,4 @@ function paginaVerificacao(doacao) {
 <p>Integridade do registro verificada. Não é certificado ICP-Brasil.</p></body></html>`;
 }
 
-module.exports = { validarChecklist, canonico, hashDe, baseURL, png, paginaComprovante, paginaVerificacao };
+module.exports = { validarChecklist, canonico, hashDe, baseURL, urlQR, png, paginaComprovante, paginaVerificacao };

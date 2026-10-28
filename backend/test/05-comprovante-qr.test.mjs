@@ -4,12 +4,15 @@ import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { createServer, request } from 'node:http';
+import { once } from 'node:events';
 import { call, login, dia, janela, checklist } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 const require = createRequire(import.meta.url);
 const QRCode = require('qrcode');
-const { canonico, hashDe, baseURL, paginaComprovante, paginaVerificacao } = require('../src/comprovante.js');
+const comprovantes = require('../src/comprovante.js');
+const { canonico, hashDe, baseURL, urlQR, paginaComprovante, paginaVerificacao } = comprovantes;
 const db = testClient(testConnection().connectionString);
 let comper, esp, sabor, amb, lote, codigo, doacao;
 await db.connect();
@@ -76,6 +79,112 @@ test('L04 base URL respeita configuração e fallback sem mudar configurações 
     process.env.BASE_URL = 'javascript:alert(1)';
     assert.throws(() => baseURL(req), /BASE_URL/);
   } finally {
+    if (anterior === undefined) delete process.env.BASE_URL; else process.env.BASE_URL = anterior;
+  }
+});
+
+test('L04 Host estrito e link QR limitado em bytes; configuração inválida continua interna', async () => {
+  const anterior = process.env.BASE_URL;
+  const req = { protocol: 'http', get: () => 'localhost:3000' };
+  const entradaInvalida = (e) => e.constructor.name === 'ErroValidacao';
+  const configuracaoInvalida = (e) => !entradaInvalida(e) && /BASE_URL/.test(e.message);
+  try {
+    delete process.env.BASE_URL;
+    const maximo = [63, 63, 63, 61].map((n) => 'a'.repeat(n)).join('.');
+    for (const host of ['localhost:3000', '127.0.0.1:3000', '[::1]:3000', '[::1]', `${maximo}:65535`])
+      assert.ok(baseURL({ ...req, get: () => host }).startsWith('http://'));
+    for (const host of [undefined, '', '[', 'a'.repeat(3000) + '.test', 'a'.repeat(64) + '.test',
+      maximo + 'a', '-exemplo.test', 'exemplo-.test', 'a..test', 'localhost:65536',
+      'localhost:abc', 'localhost/path', 'usuario@localhost', 'localhost?x', 'localhost#x', ' localhost'])
+      assert.throws(() => baseURL({ ...req, get: () => host }), entradaInvalida, String(host));
+    const base = 'https://exemplo.test';
+    const caminho = '/verificar/' + 'a'.repeat(64);
+    process.env.BASE_URL = base + '/' + 'a'.repeat(1024 - base.length - 1 - caminho.length);
+    const limite = urlQR(req, caminho);
+    assert.equal(Buffer.byteLength(limite), 1024);
+    assert.ok((await comprovantes.png(limite)).length > 0);
+    process.env.BASE_URL += 'a';
+    assert.throws(() => urlQR(req, caminho), configuracaoInvalida);
+    process.env.BASE_URL = base + '/' + 'é'.repeat(200);
+    assert.throws(() => urlQR(req, caminho), configuracaoInvalida); // URL percent-encoded excede o limite.
+    process.env.BASE_URL = 'https://' + 'a'.repeat(64) + '.test';
+    assert.throws(() => baseURL(req), configuracaoInvalida);
+    process.env.BASE_URL = base + '/' + 'a'.repeat(3000);
+    assert.throws(() => baseURL(req), configuracaoInvalida);
+  } finally {
+    if (anterior === undefined) delete process.env.BASE_URL; else process.env.BASE_URL = anterior;
+  }
+});
+
+test('L04 regressão M1 por HTTP: Host excessivo → 400 JSON; encoder falha → 500 JSON', async () => {
+  // Rotas, middleware JWT e Express reais; só banco e falha do encoder são simulados.
+  const anterior = process.env.BASE_URL;
+  const logs = [];
+  const segredo = 'segredo-ficticio-l04-m1';
+  let app, falharEncoder = false;
+  const express = require('express');
+  function criarApp() { app = express(); app.listen = () => {}; return app; }
+  Object.assign(criarApp, express);
+  class Pool {
+    on() {}
+    async query() { return { rows: [{ reservado_por: 4, status: 'reservado', codigo: '001234' }] }; }
+  }
+  const modulo = { ...comprovantes, png: async (url) => {
+    if (falharEncoder) throw new Error('Falha sintética do encoder L04');
+    return comprovantes.png(url);
+  } };
+  const server = createServer();
+  try {
+    delete process.env.BASE_URL;
+    vm.runInNewContext(readFileSync(new URL('../src/server.js', import.meta.url), 'utf8'), {
+      require: (nome) => nome === 'pg' ? { Pool } : nome === 'express' ? criarApp :
+        nome === './validacao' ? require('../src/validacao.js') : nome === './comprovante' ? modulo : require(nome),
+      __dirname: new URL('../src/', import.meta.url).pathname,
+      process: { env: { NODE_ENV: 'test', JWT_SECRET: segredo } },
+      console: { error: (e) => logs.push(e.message) },
+    });
+    server.on('request', app);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const token = require('jsonwebtoken').sign({ id: 4, perfil: 'receptora' }, segredo);
+    const consultar = (host) => new Promise((resolve, reject) => {
+      const req = request({ hostname: '127.0.0.1', port: server.address().port, path: '/lotes/1/qrcode',
+        headers: { Host: host, Authorization: 'Bearer ' + token } }, (res) => {
+        const partes = [];
+        res.on('data', (p) => partes.push(p));
+        res.on('error', reject);
+        res.on('end', () => resolve({ status: res.statusCode, tipo: res.headers['content-type'], body: Buffer.concat(partes) }));
+      });
+      req.on('error', reject);
+      req.setTimeout(5000, () => req.destroy(new Error('Timeout HTTP da regressão L04')));
+      req.end();
+    });
+    const valido = await consultar('localhost:3000');
+    assert.equal(valido.status, 200);
+    assert.match(valido.tipo, /^image\/png/);
+    assert.deepEqual(valido.body, await comprovantes.png('http://localhost:3000/#retirada/1/001234'));
+    for (const host of ['a'.repeat(3000) + '.test', '[', 'localhost/path']) {
+      const r = await consultar(host);
+      assert.equal(r.status, 400);
+      assert.match(r.tipo, /^application\/json/);
+      assert.deepEqual(JSON.parse(r.body), { erro: 'Endereço da requisição inválido.' });
+    }
+    assert.deepEqual(logs, []);
+    falharEncoder = true;
+    const interno = await consultar('localhost:3000');
+    assert.equal(interno.status, 500);
+    assert.match(interno.tipo, /^application\/json/);
+    assert.deepEqual(JSON.parse(interno.body), { erro: 'Erro interno do servidor.' });
+    assert.deepEqual(logs, ['Falha sintética do encoder L04']);
+    falharEncoder = false;
+    process.env.BASE_URL = 'https://exemplo.test/' + 'a'.repeat(3000);
+    const configuracao = await consultar('localhost:3000');
+    assert.equal(configuracao.status, 500);
+    assert.match(configuracao.tipo, /^application\/json/);
+    assert.deepEqual(JSON.parse(configuracao.body), { erro: 'Erro interno do servidor.' });
+    assert.match(logs[1], /BASE_URL/);
+  } finally {
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
     if (anterior === undefined) delete process.env.BASE_URL; else process.env.BASE_URL = anterior;
   }
 });

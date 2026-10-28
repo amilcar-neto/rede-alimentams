@@ -355,8 +355,9 @@ app.get('/lotes/:id/qrcode', autenticar, exigirPerfil('receptora'), rota(async (
   if (!l) return res.status(404).json({ erro: 'Lote não encontrado.' });
   if (l.reservado_por !== req.usuario.id) return res.status(403).json({ erro: 'QR disponível apenas para a entidade que reservou.' });
   if (l.status !== 'reservado') return res.status(409).json({ erro: 'Este lote não tem reserva ativa.' });
-  const url = `${comprovantes.baseURL(req)}/#retirada/${id}/${l.codigo}`;
-  res.set('Cache-Control', 'no-store').type('png').send(await comprovantes.png(url));
+  const url = comprovantes.urlQR(req, `/#retirada/${id}/${l.codigo}`);
+  const imagem = await comprovantes.png(url);
+  res.set('Cache-Control', 'no-store').type('png').send(imagem);
 }));
 
 app.get('/doacoes/:id/comprovante', autenticar, rota(async (req, res) => {
@@ -366,7 +367,7 @@ app.get('/doacoes/:id/comprovante', autenticar, rota(async (req, res) => {
   if (!d) return res.status(404).json({ erro: 'Doação não encontrada.' });
   if (![d.doador_id, d.receptor_id].includes(req.usuario.id))
     return res.status(403).json({ erro: 'Comprovante disponível apenas para as duas partes da doação.' });
-  const html = await comprovantes.paginaComprovante(d, `${comprovantes.baseURL(req)}/verificar/${d.hash}`);
+  const html = await comprovantes.paginaComprovante(d, comprovantes.urlQR(req, `/verificar/${d.hash}`));
   res.set('Cache-Control', 'no-store').type('html').send(html);
 }));
 
