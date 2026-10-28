@@ -2,7 +2,9 @@
 
 > **Retomada em 28/10/2026:** revisão revalidada no HEAD `c489df014c6e4005f105de2ac6cfb7f4fb9d4856`. Resultado **continue**; F1–F3 permanecem necessários. A seção final deste arquivo registra as verificações novas e distingue as evidências históricas preservadas abaixo. `block_reason: permission_denied` preserva a negativa anterior do Docker, sem reclassificá-la ou contorná-la.
 >
-> **Revisão independente claude em 28/10/2026 (HEAD `14e85fe`):** resultado **continue**; F1 e F2 reproduzidos agora em navegador real (Claude in Chrome), F3 reconferido. Ver a última seção, "Revisão independente — claude — HEAD 14e85fe".
+> **Revisão independente claude em 28/10/2026 (HEAD `14e85fe`):** resultado **continue**; F1 e F2 reproduzidos agora em navegador real (Claude in Chrome), F3 reconferido. Ver a seção "Revisão independente — claude — HEAD 14e85fe".
+>
+> **Revisão das correções, claude, 28/10/2026 (HEAD `1d74e5c`):** resultado **ready**; F1–F3 corrigidos e conferidos (suíte 158/158, F1 e F2 em navegador real). Conferência visual humana e pendências [GRUPO] continuam abertas. Ver a última seção, "Revisão das correções F1–F3 — claude — HEAD 1d74e5c".
 
 Data: 28/10/2026. Ferramenta: codex. Papel: revisor independente, executor único, sem subagentes. Modelo solicitado/efetivo e esforço: `nao_verificado` pelo cliente. Branch recebida: `lote/FINAL`.
 
@@ -211,3 +213,47 @@ Concordo com a classificação **média** dos três: nenhum permite acesso indev
 ### Conclusão
 
 **continue.** Sem achado crítico/alto, mas F1, F2 e F3 (médios, reproduzidos/confirmados) são correções necessárias antes do aceite final e dos prints definitivos. Encaminhar fase de correção autorizada com os arquivos:linha acima, `npm test` e nova revisão do commit corrigido. `block_reason: none` nesta sessão: nenhuma permissão foi negada e nenhuma ferramenta faltou; a negativa histórica do Docker continua registrada como `permission_denied` nas seções anteriores.
+
+## Revisão das correções F1–F3 — claude — HEAD 1d74e5c (28/10/2026)
+
+Esta seção é o resultado mais recente; as anteriores ficam como evidência histórica, inclusive a negativa de acesso à configuração do Docker (`permission_denied`, sessão codex), que não foi repetida, contornada nem reclassificada. Ferramenta: claude; modelo efetivo/esforço não informados pelo cliente. Executor único, sem subagentes.
+
+### Versão e escopo
+
+- Branch `lote/FINAL`, árvore limpa no início. Baseline `cf88651`; HEAD `1d74e5cb60ce097c4a01fb86f7c480755b514d61`; main `7d12d35`. Diff acumulado `baseline..HEAD`: 63 arquivos, 8.147 inserções, 175 remoções.
+- Mudança desde a última revisão (`14e85fe..1d74e5c`, "FINAL wip: claude implement"): `backend/src/tempo-real.js`, `backend/public/index.html` (maxlength e ramo 4001), testes 06 e 07 (só acréscimos), `docs/DEPLOY.md` §7 e "Limites", `LOG.md` e o novo `progresso/FINAL.md`. Lidos integralmente o diff e o contexto de `iniciarTempoReal`/`fecharConexao`/`mostrarAviso`, `mascararTelefone`, `validacao.telefone`, `registrar` em `tempo-real.js`, a imagem/montagem do `db` no compose de produção e o checklist/LOG do FINAL.
+
+### Conferência dos achados
+
+- **F1 — resolvido.** `backend/src/tempo-real.js:9,49`: a conexão que cede a vaga fecha com `4001` (faixa de aplicação 4000–4999), distinto do `1008` de autenticação. `backend/public/index.html:804–810`: em 4001 o front consulta `/notificacoes` por HTTP, mostra aviso e retorna antes de agendar reconexão; não há outro gatilho de reconexão automática (`iniciarTempoReal` só é chamado no login/restauração de sessão, `:304`, e pelo próprio temporizador). Teste de servidor novo (`backend/test/06-notificacoes.test.mjs:418–429`) abre seis conexões reais: só a mais antiga fecha, com 4001, e as cinco restantes recebem `lote_publicado`; teste de front (`:404–415`) confere ausência de nova tentativa e o aviso. **Navegador real (Claude in Chrome), nesta sessão:** conta demo `amambai@demo.com` em seis abas; a primeira ficou com `ws = null`, `tentativasWs = 0` e 2 consultas a `/notificacoes`; as outras cinco com `readyState = 1` e 1 consulta cada. **Depois de mais 20 s, contagens idênticas** (na revisão de `14e85fe`, a sexta aba ia de 13 para 17 consultas em 15 s). O ciclo de expulsão não ocorre mais.
+- **F2 — resolvido.** `backend/public/index.html:140`: `maxlength="20"`, igual ao limite de `validacao.telefone` (`backend/src/validacao.js:139`); a máscara (`:196–202`) continua limitando a 11 dígitos. O teste 07 (`backend/test/07-cadastro-kpis.test.mjs:392–398`) lê o `maxlength` do HTML e trunca antes da máscara, cobrindo quatro formatos, sem afrouxar asserções antigas; com o valor anterior (16) ele falharia. **Navegador real, nesta sessão:** formulário de cadastro, inserção com `document.execCommand('insertText')` no campo focado (edição equivalente à do usuário, `maxLength` = 20): `+55 67 99999-0006` → `(67) 99999-0006`; `+55 (67) 99999-0006` → `(67) 99999-0006`; `+55 67 3333-0001` → `(67) 3333-0001`. Campo limpo depois; formulário **não** enviado, nenhuma conta criada. A colagem real pela área de transferência (Ctrl+V) não foi repetida.
+- **F3 — resolvido no documento.** `docs/DEPLOY.md:98–151`: backup em `~/backups` (fora do clone, `chmod 700`), explicação de por que o banco do serviço não está vazio (init.sql no primeiro boot), ensaio em `restaura_teste` criado vazio, `psql -v ON_ERROR_STOP=1` (`:124`), verificação por contagens (`usuarios`, `lotes`, `notificacoes` existem em `db/init.sql`), remoção do banco de ensaio e sequência de substituição com parada do `app` e decisão [GRUPO]. `:213–216` distingue o `docker compose config` histórico do L07 da negativa da revisão final e declara que backup/restauração não foram executados. **Não executado nesta revisão** (sem Docker/VPS; negativa histórica não contornada).
+
+### Observações novas (baixa, sem correção obrigatória)
+
+- **B2 — Baixa.** O aviso do 4001 usa `mostrarAviso`, que some após 8 s (`backend/public/index.html:760`); depois disso a aba suspensa não indica que está sem tempo real (no teste o aviso já estava oculto ao ler a aba). As notificações continuam acessíveis pelo sino/HTTP e a decisão está registrada em `progresso/FINAL.md`. Melhoria futura: indicador persistente.
+- **B3 — Baixa / não verificado.** A imagem `postgis/postgis:16-3.4` (`docker-compose.prod.yml:6`) instala extensões auxiliares do PostGIS no banco do serviço, que entrarão no dump. Eventuais conflitos dessas extensões na restauração **não foram verificados**. Com `ON_ERROR_STOP` e o ensaio em `restaura_teste` (passo 1), qualquer falha aparece sem afetar o banco em uso; por isso o ensaio do grupo em ambiente descartável é obrigatório antes de depender do procedimento (já declarado em `docs/DEPLOY.md:150–151`).
+- O passo 3 de `DEPLOY.md` (substituir produção) está em prosa, sem bloco de comandos literal; aceitável por exigir decisão [GRUPO], mas o grupo deve registrar os comandos exatos ao ensaiar.
+- B1 (tentativas de código em `confirmar-retirada`, `backend/src/server.js:403–429`) e os achados baixos anteriores permanecem registrados como limitações.
+
+### Verificações executadas nesta sessão
+
+- **`npm.cmd test` em backend/: 158 testes, 158 pass, 0 fail, 0 cancelled, 0 skipped, 0 todo; duration_ms 38865,5901.** Reset exclusivo de `alimentams_test` a partir de `db/init.sql`; suíte concluída **antes** do servidor manual.
+- `git diff --check 7d12d35..HEAD -- backend docs/DEPLOY.md`: código 0.
+- Servidor manual: somente `node backend/src/server.js` em segundo plano ("Rede AlimentaMS rodando em http://localhost:3000"), encerrado pela ferramenta de tarefas; sondagem TCP posterior em 127.0.0.1:3000 → **ECONNREFUSED**.
+- Navegador: Claude in Chrome conectado. Usada só a conta demo do seed pelo botão de demonstração do próprio front; sessão encerrada com "Sair"; as seis abas criadas foram fechadas. Nenhum formulário enviado, nenhuma conta criada, nenhuma captura salva.
+- Não executados: Docker/Compose, `caddy validate`, backup/restauração, carga (sem mudança no cenário medido; o script sobrescreveria `docs/testes/resultado-carga.md`). Sem VPS, publicação, mensagens, dados reais, leitura de `.env`, alteração de código/testes/plano/instruções/controlador/fila/.agentes ou operações Git. Único arquivo escrito: este relatório.
+
+### Checklist FINAL (revisão das correções)
+
+- [x] Confirmar versão e isolar a mudança `14e85fe..1d74e5c`.
+- [x] F1: código, regressões de servidor e front, e conferência em seis abas reais sem ciclo.
+- [x] F2: `maxlength` alinhado ao servidor, regressão que aplica o limite do HTML, conferência no formulário real.
+- [x] F3: destino vazio, `ON_ERROR_STOP`, verificação, backup fora do clone e limites documentais corrigidos.
+- [x] `npm test` verde em banco descartável; servidor, abas e sessão encerrados.
+- [ ] **Conferência visual humana PENDENTE** (não feita nesta sessão): em banco recém-carregado de `db/init.sql`, executar os seis passos do "Roteiro humano exato" (seção "Checklist FINAL e verificações humanas" acima) e os 22 estados de `docs/ROTEIRO_PRINTS.md`, incluindo celular, câmera/QR, seletor nativo de arquivos, impressão, colagem real de telefone com +55 pela área de transferência e seis abas reais da mesma conta (conferir aviso e estabilidade).
+- [ ] Pendências humanas [GRUPO]: revisão jurídica [VERIFICAR], relatório técnico consolidado, build/Compose/Caddy/DNS/TLS no VPS, ensaio real de backup/restauração (inclui B3), capturas definitivas e entrega. Nada disso foi feito ou aprovado.
+
+### Conclusão
+
+**ready.** F1, F2 e F3 estão corrigidos, com regressões que falhariam no código anterior e conferência própria (navegador para F1/F2, leitura para F3); nenhum achado crítico/alto em `baseline..HEAD`. B1–B3 são baixas e ficam registradas como limitações. Este aceite técnico não substitui a conferência visual humana, as pendências [GRUPO], prints definitivos, deploy ou entrega, que continuam por fazer. `block_reason: none` nesta sessão.
