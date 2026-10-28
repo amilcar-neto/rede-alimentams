@@ -287,6 +287,53 @@ test('L04 snapshot permanece igual se o cadastro mudar; falha de integridade é 
   assert.throws(() => paginaVerificacao(corrompido), /integridade/);
 });
 
+test('L04 regressão M2 por HTTP: integridade inválida → 500 application/json sem dados privados', async () => {
+  // Express e renderização reais; só a leitura do banco é simulada para não violar a imutabilidade.
+  const logs = [];
+  let app, corromper = false;
+  const express = require('express');
+  function criarApp() { app = express(); app.listen = () => {}; return app; }
+  Object.assign(criarApp, express);
+  class Pool {
+    on() {}
+    async query() {
+      return { rows: [{ hash: doacao.hash, comprovante: corromper
+        ? { ...doacao.comprovante, quantidade_kg: '99.00' } : doacao.comprovante }] };
+    }
+  }
+  const server = createServer();
+  try {
+    vm.runInNewContext(readFileSync(new URL('../src/server.js', import.meta.url), 'utf8'), {
+      require: (nome) => nome === 'pg' ? { Pool } : nome === 'express' ? criarApp :
+        nome === './validacao' ? require('../src/validacao.js') :
+        nome === './comprovante' ? comprovantes : require(nome),
+      __dirname: new URL('../src/', import.meta.url).pathname,
+      process: { env: { NODE_ENV: 'test', JWT_SECRET: 'segredo-ficticio-l04-m2' } },
+      console: { error: (e) => logs.push(e.message) },
+    });
+    server.on('request', app);
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const url = `http://127.0.0.1:${server.address().port}/verificar/${doacao.hash}`;
+    const consultar = () => fetch(url, { signal: AbortSignal.timeout(5000) });
+    const valido = await consultar(); // Rota pública, sem token.
+    assert.equal(valido.status, 200);
+    assert.match(valido.headers.get('content-type'), /^text\/html/);
+    assert.equal(valido.headers.get('cache-control'), 'no-store');
+    assert.match(await valido.text(), /Comprovante válido/);
+    assert.deepEqual(logs, []);
+    corromper = true;
+    const invalido = await consultar();
+    assert.equal(invalido.status, 500);
+    const corpo = await invalido.text();
+    assert.deepEqual(JSON.parse(corpo), { erro: 'Erro interno do servidor.' });
+    assert.match(invalido.headers.get('content-type'), /^application\/json/);
+    assert.deepEqual(logs, ['Falha de integridade no comprovante.']);
+  } finally {
+    if (server.listening) await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('L04 QR não permanece disponível após entrega ou liberação da reserva', async () => {
   assert.equal((await raw(`/lotes/${lote}/qrcode`, esp)).status, 409);
   const nova = await preparar('Reserva que envelhece');

@@ -377,7 +377,8 @@ app.get('/verificar/:hash', rota(async (req, res) => {
   if (!/^[0-9a-f]{64}$/.test(hash)) return res.status(404).json({ erro: 'Comprovante não encontrado.' });
   const r = await pool.query('SELECT hash, comprovante FROM doacoes WHERE hash=$1', [hash]);
   if (!r.rows[0]) return res.status(404).json({ erro: 'Comprovante não encontrado.' });
-  res.set('Cache-Control', 'no-store').type('html').send(comprovantes.paginaVerificacao(r.rows[0]));
+  const html = comprovantes.paginaVerificacao(r.rows[0]);
+  res.set('Cache-Control', 'no-store').type('html').send(html);
 }));
 
 // ---------- Histórico e indicadores ----------
