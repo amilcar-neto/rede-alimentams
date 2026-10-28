@@ -6,6 +6,7 @@ const { WebSocketServer } = require('ws');
 
 const PRAZO_AUTENTICACAO_MS = 5000;
 const MAX_CONEXOES_POR_USUARIO = 5;
+const CODIGO_LIMITE_SESSOES = 4001; // próprio: o front não reconecta, senão as abas se expulsariam em ciclo
 const INTERVALO_PING_MS = 30000;
 const MAX_TIMER_MS = 2 ** 31 - 1;
 const TIPOS = ['lote_publicado', 'lote_liberado', 'lote_reservado', 'retirada_confirmada'];
@@ -45,7 +46,7 @@ function criarTempoReal({ segredo, log = console.error }) {
     while (grupo.size > MAX_CONEXOES_POR_USUARIO) {
       const antiga = grupo.values().next().value;
       grupo.delete(antiga);
-      antiga.close(1008, 'Muitas conexões abertas para esta conta.');
+      antiga.close(CODIGO_LIMITE_SESSOES, 'Muitas conexões abertas para esta conta.');
     }
   }
 
