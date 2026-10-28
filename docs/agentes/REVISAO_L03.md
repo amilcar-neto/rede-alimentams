@@ -56,3 +56,49 @@ Os critérios de aceite do plano estão cumpridos e cobertos por testes, mas a c
 ## Próximo passo
 Corrigir A1 em `server.js:169-192` com teste em `04-lote.test.mjs` (ou `06-notificacoes`). A2/A3 são opcionais no mesmo ciclo. Depois, repetir `npm test` e fazer nova revisão.
 Conferência visual humana segue pendente só para o seletor nativo de arquivo e o viewport móvel (roteiro no checklist L03).
+
+---
+
+## Revisão 2 — 28/10/2026 (claude, review) — commit 3cd37d0
+
+- Revisor: claude, executor único, sem subagentes. Diff `main..HEAD` relido por completo, com atenção à correção `9af474f..3cd37d0` (server.js, index.html, 04-lote, 06-notificacoes). Achados da revisão 1 preservados acima. Só este relatório foi alterado.
+
+### Resultado: **ready** (nenhum achado crítico, alto ou médio em aberto)
+
+### Situação dos achados
+- **A1 (alta) — corrigido.** `backend/src/server.js:169-180`: o primeiro passo de `atualizarStatus` expira os lotes `reservado` com `retirada_ate <= now()` e `janela_fim + tolerância < now()`. Isso acontece antes da liberação em `:184-199`, que aplica a mesma condição de atraso. Assim, o lote não volta a `disponivel`, não gera `lote_liberado` nem notificação e perde o código (`codigo = NULL`). Um lote atrasado cujo prazo ainda não passou continua sendo liberado normalmente, porque a nova reserva também fica limitada a `retirada_ate`.
+  - Teste novo: `backend/test/06-notificacoes.test.mjs:252`. São 4 chamadas simultâneas a `GET /lotes`; o teste verifica status `expirado`, código nulo, nenhuma `lote_liberado` para 4 usuários (inclusive o doador), eventos exatamente `publicado, reservado, expirado` e nova reserva → 409.
+  - O teste detectaria a regressão: sem o novo `OR`, a liberação geraria o evento `liberado` e as notificações, e as asserções falhariam.
+- **A2 (baixa) — corrigido.** `backend/public/index.html:393`: `onerror` remove a miniatura. No navegador, a receptora amambai tinha 7 lotes com `tem_foto`. Só os 2 decodificáveis foram exibidos; os 5 de bytes sintéticos foram removidos, sem ícone quebrado.
+- **A3 (baixa) — corrigido.** `backend/public/index.html:293-299`: 00:00 aparece como "fim do dia dd/mm" (dia anterior). Há asserção em `04-lote.test.mjs:237`. No navegador: "retirar até fim do dia 29/10" para lotes válidos até 29/10.
+- **A4 (baixa) — em aberto, não impeditivo.** O limite de 700 KB é aplicado antes da autenticação, e `POST /lotes/` com barra final recebe 413 em vez de 400 (`server.js:32`, `:534`). O front não usa esse caminho.
+- **A5 (baixa) — em aberto, não impeditivo.** `docs/testes/e2e-api.mjs` está desatualizado (sem `retirada_ate`), o que já está registrado no checklist/LOG.
+
+### Evidências desta revisão
+- `npm.cmd test` em backend/ (executado nesta revisão): **138 tests / 138 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo**, ~32,1 s, banco descartável `alimentams_test`.
+- Testes anteriores: só ganharam `retirada_ate` no corpo de `POST /lotes` (helper `retiradaAte`), sem asserção removida ou afrouxada (diff conferido em 00, 01, 02, 03, 05 e 06).
+- Aceite do plano L03, conferido no código e nos testes:
+  - com e sem foto → 201;
+  - não imagem ou foto grande demais → 400;
+  - `retirada_ate` no passado → 400;
+  - receptora fora do raio → 404 na foto.
+  - A janela de reserva respeita `retirada_ate`: `server.js:305-306` e `:315-316`.
+  - A listagem traz só `tem_foto`; não há `SELECT *` nem outro caminho que devolva os bytes (grep em `backend/src`).
+- **Conferência no navegador (Claude in Chrome, http://localhost:3000, servidor `node backend/src/server.js` em segundo plano, já encerrado; aba fechada):**
+  - Receptora amambai (sessão já salva no navegador): A2 e A3 conferidos como descrito acima. A resposta de `GET /lotes` não tem campo `foto`.
+  - Doador comper (conta do seed), aba Publicar:
+    - padrão "Retirar até" 29/10 18:00, máx. 30/10 00:00;
+    - PNG semitransparente de 2000x1500 (88 KB), gerado na página e injetado no seletor por script (DataTransfer), reduzido a JPEG 1024x768 (~14 KB);
+    - prévia com fundo branco (transparência tratada);
+    - "Publicar lote" → mensagem de sucesso; o card do lote 89 mostra a miniatura e "retirar até 29/10 18:00".
+  - Receptora longe (login do seed via `fetch` na página): `GET /lotes/89/foto` → 404, e o lote não aparece na listagem dela.
+  - Não visto: seletor nativo de arquivos, viewport móvel e mensagens de erro do formulário de reserva (estas estão cobertas por testes).
+
+### Conferência visual humana PENDENTE (não impeditiva)
+- Roteiro: entrar como comper@demo.com → Publicar lote → escolher pelo **seletor nativo** uma foto real grande (JPEG e PNG) → ver a prévia → publicar uma vez com horário limite no passado (deve dar erro) e outra com horário válido. Depois:
+  - entrar como amambai@demo.com → ver miniatura e "retirar até" → reservar com janela além do limite (deve dar erro);
+  - repetir em **viewport móvel**.
+- Diagnóstico: a extensão não aciona o seletor de arquivos do sistema operacional, por isso o arquivo foi injetado por script. O viewport móvel não foi testado nesta sessão.
+
+### Próximo passo
+Controlador pode integrar o L03. A4/A5 ficam como melhorias de baixa severidade (sugestão: tratar `/lotes/` no limite do corpo e atualizar `e2e-api.mjs` no L08). Conferência visual humana segue pendente conforme o roteiro acima.
