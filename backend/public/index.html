@@ -62,6 +62,10 @@
   .codigo b { font-size: 1.4rem; letter-spacing: 4px; }
   .acao { display: flex; gap: 8px; align-items: center; margin-top: 10px; justify-content: space-between; }
   .acao input { max-width: 130px; }
+  .sanitario { border: 1px solid var(--borda); border-radius: 6px; margin: 10px 0; padding: 8px; }
+  .sanitario input { width: auto; margin-right: 6px; }
+  .sanitario label { color: var(--texto); }
+  .qr-retirada { display: block; width: 220px; max-width: 100%; margin: 8px auto; }
   table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 10px; overflow: hidden; font-size: .9rem; }
   th { background: var(--verde); color: #fff; text-align: left; padding: 10px; }
   td { padding: 10px; border-bottom: 1px solid var(--borda); }
@@ -128,6 +132,7 @@
 let token = localStorage.getItem('token');
 let usuario = JSON.parse(localStorage.getItem('usuario') || 'null');
 let abaAtual = null;
+let imagensQR = [];
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -277,12 +282,19 @@ function cartaoLote(l, doador) {
     rodape = '<div class="acao"><span class="tag t-hoje">expirado</span></div><div class="meta">O prazo de validade passou sem retirada.</div>';
   } else if (doador && reservado) {
     rodape = `<div class="meta"><b>${esc(l.reservado_por_nome)}</b> retira entre <b>${esc(textoJanela(l))}</b></div>
+      <fieldset class="sanitario"><legend>Checklist sanitário obrigatório</legend>
+        <label><input type="checkbox" id="emb${l.id}">Embalagem íntegra</label>
+        <label><input type="checkbox" id="temp${l.id}">Temperatura adequada</label>
+        <label><input type="checkbox" id="val${l.id}">Dentro da validade</label>
+      </fieldset>
       <div class="acao"><input id="cod${l.id}" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos" aria-label="Código de retirada">
       <button class="azul" onclick="confirmar(${l.id})">Confirmar retirada</button></div>`;
   } else if (doador) {
     rodape = '<div class="acao"><span class="tag t-ok">disponível</span></div>';
   } else if (reservado) {
     rodape = `<div class="codigo">Código de retirada: <b>${esc(l.codigo)}</b></div>
+      <img class="qr-retirada" id="qr${l.id}" alt="QR de retirada; use o código numérico se a imagem não carregar">
+      <div class="meta">O doador pode ler o QR com a câmera do celular para abrir a confirmação preenchida.</div>
       <div class="acao"><span class="tag t-res">reservado por você</span></div>
       <div class="meta">Retire entre <b>${esc(textoJanela(l))}</b> e apresente este código ao doador. Passada a janela (mais 30 min de tolerância), a reserva é liberada para outra entidade.</div>`;
   } else {
@@ -308,6 +320,43 @@ async function telaLotes() {
     (doador ? '<h2 class="secao">Ativos</h2>' : '') +
     (ativos.length ? grade(ativos) : `<div class="vazio">${vazio}</div>`) +
     (expirados.length ? `<h2 class="secao">Expirados</h2>${grade(expirados)}` : '');
+  imagensQR.forEach((url) => URL.revokeObjectURL(url)); imagensQR = [];
+  if (!doador) lotes.filter((l) => l.status === 'reservado').forEach((l) => carregarQR(l.id));
+  aplicarLinkRetirada(lotes);
+}
+
+async function respostaProtegida(url) {
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  if (r.status === 401) sair();
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).erro || 'Não foi possível carregar o documento.');
+  return r;
+}
+
+async function carregarQR(id) {
+  const elemento = $('qr' + id);
+  try {
+    const r = await respostaProtegida(`/lotes/${id}/qrcode`);
+    const url = URL.createObjectURL(await r.blob());
+    if (!elemento.isConnected) { URL.revokeObjectURL(url); return; }
+    imagensQR.push(url); elemento.src = url;
+  } catch { elemento.alt = 'QR indisponível. Apresente o código numérico ao doador.'; }
+}
+
+function linkRetirada() {
+  const hash = typeof window === 'undefined' ? '' : window.location.hash;
+  const m = /^#retirada\/([1-9]\d{0,9})\/(\d{6})$/.exec(hash);
+  return m && Number(m[1]) <= 2147483647 ? { id: Number(m[1]), codigo: m[2] } : null;
+}
+
+function aplicarLinkRetirada(lotes) {
+  const link = linkRetirada();
+  if (!link) return;
+  if (usuario.perfil !== 'doador') { msg('aviso', 'Entre como o doador deste lote para confirmar a retirada.'); return; }
+  const lote = lotes.find((l) => l.id === link.id && l.status === 'reservado');
+  if (!lote) { msg('aviso', 'Este lote não está reservado para retirada nesta conta. Confira o doador e a reserva.'); return; }
+  const campo = $('cod' + link.id);
+  campo.value = link.codigo; campo.focus(); campo.scrollIntoView({ block: 'center' });
+  msg('aviso', 'Código preenchido pelo QR. Confira o checklist sanitário antes de confirmar.', 'ok');
 }
 
 // Mostra a escolha da janela de retirada (máx. 2 h, até o fim do dia da validade).
@@ -337,9 +386,13 @@ async function reservar(id) {
 }
 async function confirmar(id) {
   try {
-    await api('PUT', `/lotes/${id}/confirmar-retirada`, { codigo: $('cod' + id).value });
+    const d = await api('PUT', `/lotes/${id}/confirmar-retirada`, {
+      codigo: $('cod' + id).value,
+      checklist: { embalagem_integra: $('emb' + id).checked, temperatura_adequada: $('temp' + id).checked, dentro_validade: $('val' + id).checked },
+    });
+    if (linkRetirada()?.id === id) history.replaceState(null, '', window.location.pathname + window.location.search);
     await irPara('lotes');
-    $('aviso').innerHTML = '<div class="msg ok">Retirada confirmada e doação registrada.</div>';
+    $('aviso').innerHTML = `<div class="msg ok">Retirada confirmada e doação registrada. <button onclick="abrirComprovante(${d.doacao_id})">Abrir comprovante</button></div>`;
   } catch (e) { $('aviso').innerHTML = `<div class="msg erro">${esc(e.message)}</div>`; }
 }
 
@@ -371,16 +424,37 @@ async function publicar() {
 async function telaDoacoes() {
   const d = await api('GET', '/doacoes');
   if (!d.length) { $('conteudo').innerHTML = '<div class="vazio">Nenhuma doação concluída ainda.</div>'; return; }
-  $('conteudo').innerHTML = `<div class="rolagem"><table><thead><tr><th>Alimento</th><th>Doador</th><th>Qtd</th><th>Entidade</th><th>Data</th><th>Código</th></tr></thead><tbody>` +
-    d.map((x) => `<tr><td>${esc(x.alimento)}</td><td>${esc(x.doador)}</td><td>${Number(x.quantidade_kg)} kg</td><td>${esc(x.entidade)}</td><td>${esc(x.data)}</td><td>${esc(x.codigo)}</td></tr>`).join('') +
+  $('conteudo').innerHTML = `<div id="erroComprovante"></div><div class="rolagem"><table><thead><tr><th>Alimento</th><th>Doador</th><th>Qtd</th><th>Entidade</th><th>Data</th><th>Código</th><th>Comprovante</th></tr></thead><tbody>` +
+    d.map((x) => `<tr><td>${esc(x.alimento)}</td><td>${esc(x.doador)}</td><td>${Number(x.quantidade_kg)} kg</td><td>${esc(x.entidade)}</td><td>${esc(x.data)}</td><td>${esc(x.codigo)}</td><td><button onclick="abrirComprovante(${x.id})">Abrir / imprimir</button></td></tr>`).join('') +
     `</tbody></table></div>`;
+}
+
+async function abrirComprovante(id) {
+  const janela = window.open('', '_blank');
+  try {
+    if (!janela) throw new Error('Permita abrir o comprovante em uma nova aba.');
+    janela.opener = null;
+    const r = await respostaProtegida(`/doacoes/${id}/comprovante`);
+    const url = URL.createObjectURL(await r.blob());
+    janela.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    if (janela) janela.close();
+    const destino = $('erroComprovante') || $('aviso') || $('erroLogin');
+    msg(destino.id, e.message);
+  }
 }
 
 // ---------- Início ----------
 (async () => {
   try { $('cBairro').innerHTML = (await (await fetch('/bairros')).json()).map((b) => `<option>${esc(b)}</option>`).join(''); } catch {}
   if (token && usuario) mostrarApp();
+  else if (linkRetirada()) msg('erroLogin', 'Entre como doador para confirmar a retirada indicada pelo QR.', 'ok');
 })();
+if (typeof window !== 'undefined') window.addEventListener('hashchange', () => {
+  if (token && usuario) irPara('lotes');
+  else if (linkRetirada()) msg('erroLogin', 'Entre como doador para confirmar a retirada indicada pelo QR.', 'ok');
+});
 </script>
 </body>
 </html>

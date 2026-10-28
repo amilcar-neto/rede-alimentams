@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "description": "Rede AlimentaMS - MVP",
   "main": "src/server.js",
-  "scripts": { "start": "node src/server.js", "test": "node test/run.mjs" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node test/run.mjs"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
-    "pg": "^8.12.0"
+    "pg": "^8.12.0",
+    "qrcode": "^1.5.4"
   }
 }
