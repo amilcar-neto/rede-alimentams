@@ -1,0 +1,18 @@
+# Pacote de entrega: `git archive --format=zip -o rede-alimentams.zip HEAD`
+# Os itens abaixo ficam no repositório, mas fora do zip enviado ao professor
+# (automação dos agentes, logs de execução e a análise de 27/10 já substituída por docs/CONFORMIDADE.md).
+.gitattributes export-ignore
+.claude/ export-ignore
+AGENTS.md export-ignore
+CLAUDE.md export-ignore
+PLANO_AGENTES.md export-ignore
+ANALISE_CONFORMIDADE.md export-ignore
+agentes.cmd export-ignore
+scripts/agentes/ export-ignore
+docs/agentes/ export-ignore
+docs/EXECUCAO_AUTOMATICA.md export-ignore
+docs/testes/EXECUCAO.md export-ignore
+docs/testes/L00-execucao.txt export-ignore
+docs/testes/L01-execucao.txt export-ignore
+docs/testes/PENDENCIAS_L01.md export-ignore
+docs/testes/controlador-retomada-claude.txt export-ignore

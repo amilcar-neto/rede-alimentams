@@ -15,6 +15,8 @@ Se a porta 3000 estiver ocupada: `PORTA=8080 docker compose up -d --build` (Powe
 Para encerrar: `docker compose down`. Para começar do zero com os dados de demonstração: `docker compose down -v` e suba de novo.
 Em Mac com chip Apple, o banco (imagem oficial do PostGIS, só amd64) roda por emulação e a primeira subida pode demorar mais.
 
+O que foi entregue em relação à Etapa 4 (e o que ficou de fora): [docs/CONFORMIDADE.md](docs/CONFORMIDADE.md).
+
 ## Funcionalidades
 - Cadastro e login (JWT + bcrypt) de doadores e entidades receptoras, com CNPJ validado por dígito verificador.
 - Doador publica lotes com horário limite de retirada (obrigatório, até o fim do dia da validade) e foto opcional (reduzida no navegador, JPEG/PNG de até 400 KB); a entidade receptora vê os lotes num raio de 10 km (PostGIS), ordenados por validade e distância, com miniatura e "retirar até dd/mm hh:mm".
@@ -60,7 +62,11 @@ Porta padrão 3000 (`PORT` altera). Deploy em servidor: [docs/DEPLOY.md](docs/DE
 
 ### Testes
 ```bash
+docker compose -f docker-compose.test.yml up -d        # banco de testes em 127.0.0.1:5433
 cd backend
+npm install
+# PowerShell: $env:TEST_DATABASE_URL="postgres://alimentams_test:alimentams_test_local@127.0.0.1:5433/alimentams_test"
+export TEST_DATABASE_URL=postgres://alimentams_test:alimentams_test_local@127.0.0.1:5433/alimentams_test
 npm test
 ```
 Usa um banco exclusivo e descartável (`alimentams_test`, porta 5433; veja `docker-compose.test.yml`), recriado a partir de `db/init.sql`. O reset recusa bancos de desenvolvimento e produção. O servidor de teste usa a porta 3100.
@@ -123,25 +129,3 @@ Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisi�
 | GET | /notificacoes | autenticado (apenas as próprias) |
 | PUT | /notificacoes/lidas, /notificacoes/:id/lida | autenticado (apenas as próprias) |
 | WS | /ws | JWT no primeiro frame |
-
-## Desenvolvimento com agentes (bastidores do projeto)
-
-No terminal, na raiz do projeto:
-
-```powershell
-.\agentes.cmd diagnostico
-.\agentes.cmd iniciar
-```
-
-Se faltar o banco na porta 5433, abra o Docker Desktop e execute
-`.\agentes.cmd banco`; depois repita o diagnóstico. Isso prepara um banco
-de testes separado do banco da aplicação.
-
-O controlador usa Codex até atingir o limite, depois Claude até o limite; com
-ambos limitados, espera uma hora e tenta Codex primeiro. Estado persiste entre
-execuções. Use `.\agentes.cmd status` e `.\agentes.cmd parar` em outro terminal.
-Não deixe agentes manuais editando a pasta ao mesmo tempo.
-
-O Claude está configurado no modo nativo sem pedidos de permissão, conforme
-escolha do usuário: isso dá acesso da conta Windows, não isolamento à pasta.
-Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXECUCAO_AUTOMATICA.md).

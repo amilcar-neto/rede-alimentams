@@ -38,4 +38,4 @@ Se o celular/rede não estiver pronto, executar a alternativa **declaradamente s
 
 ## Registro humano pendente
 
-Anotar data/fuso, versão/commit fornecido pelo controlador, contas, navegador/dispositivos, origem utilizada sem segredos, duração, resultado de cada etapa, QR real ou simulado, avisos ao vivo ou por consulta, falhas e arquivos de captura. Encerrar o servidor local iniciado para o ensaio. Neste complemento o navegador automatizado retornou `The browser access host is unavailable`; a negativa histórica de uso do Edge foi preservada, sem contorno. Não houve ensaio visual, câmera, impressão ou captura de tela nesta execução.
+Anotar data/fuso, versão/commit (`git log -1`), contas, navegador/dispositivos, origem utilizada sem segredos, duração, resultado de cada etapa, QR real ou simulado, avisos ao vivo ou por consulta, falhas e arquivos de captura. Encerrar o servidor local iniciado para o ensaio.
