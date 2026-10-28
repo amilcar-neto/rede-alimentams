@@ -46,3 +46,10 @@
 - Guarda do reset conferida antes da suíte, sem ler arquivos de credenciais. `npm.cmd test` em backend/ usou somente `alimentams_test`, código **0**, **65 aprovados / 0 fail / 0 todo / 0 skipped / 0 cancelled**, node:test **8394,1511 ms**. Saída observada diretamente; arquivo histórico da suíte preservado.
 - Resultado **blocked**: conferência visual obrigatória depende de acesso autorizado ao navegador ou execução e registro pelo controlador/grupo do [roteiro L01](progresso/L01.md). Depois, controlador repete testes e chama revisão separada. Nenhum novo teste manual visual, revisão independente/humana ou aceite declarado.
 - Alterados apenas checklist e LOG.md; sem commits/staging/troca de branch/integração, mudanças em .git/.agentes/controlador/plano/instruções/permissões, VPS, publicação ou mensagens externas. Consumo e duração total não medidos.
+
+## 28/10/2026 — L01 — retomada codex, 01:29 (America/Campo_Grande)
+
+- Papel: executor; modelo solicitado/efetivo e esforço: nao_verificado. Sem subagentes. Branch `lote/L01`, HEAD `59f5322`, árvore inicialmente limpa. Relidos AGENTS.md, seção L01, checklist e LOG.md.
+- Resultado **blocked**: feedback e registros confirmam que a validação visual obrigatória permanece impedida pela negativa `Computer Use was not approved to use Microsoft Edge`. Nenhuma nova autorização ou evidência manual recebida; nenhum acesso ao navegador tentado nesta retomada.
+- Código e testes preservados. Última execução registrada (01:15): `npm.cmd test` em backend/, código 0, 65 aprovados / 0 fail / 0 todo / 0 skipped / 0 cancelled, 8394,1511 ms. Essa evidência é histórica; não houve nova execução da suíte, teste manual visual, print ou revisão independente nesta retomada.
+- Atualizados somente este log e o [checklist L01](progresso/L01.md). Próximo passo: controlador/grupo autorizar o acesso ou executar e registrar o roteiro visual no banco descartável; depois repetir testes e encaminhar revisão separada. Sem commits, staging, mudança de branch, integração ou alterações em .git/.agentes/controlador/plano/instruções/configurações; sem VPS, publicação ou mensagens externas. Consumo e duração total não medidos.
