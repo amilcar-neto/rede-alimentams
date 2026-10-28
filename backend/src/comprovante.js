@@ -84,9 +84,9 @@ body{font:16px system-ui,sans-serif;color:#172c1a;max-width:760px;margin:30px au
 h1{color:#1b5e20}dt{font-weight:bold;margin-top:12px}dd{margin:4px 0}code{overflow-wrap:anywhere}img{width:220px;max-width:100%}
 @media print{body{margin:0;padding:0;font-size:12pt}.orientacao{display:none}a{color:inherit;text-decoration:none}}
 </style><h1>Comprovante Digital de Doação</h1><p>Registro #${esc(doacao.id)} · Lote #${esc(c.lote_id)}</p><dl>
-<dt>Doador</dt><dd>${esc(c.doador.nome)} · CNPJ: ${esc(c.doador.cnpj)}</dd>
-<dt>Entidade receptora</dt><dd>${esc(c.receptora.nome)} · CNPJ: ${esc(c.receptora.cnpj)}</dd>
-<dt>Alimento / quantidade</dt><dd>${esc(c.alimento)} · ${esc(c.quantidade_kg)} kg</dd>
+<dt>Doador</dt><dd>${esc(c.doador.nome)} · CNPJ: ${esc(cnpjBR(c.doador.cnpj))}</dd>
+<dt>Entidade receptora</dt><dd>${esc(c.receptora.nome)} · CNPJ: ${esc(cnpjBR(c.receptora.cnpj))}</dd>
+<dt>Alimento / quantidade</dt><dd>${esc(c.alimento)} · ${esc(kgBR(c.quantidade_kg))} kg</dd>
 <dt>Data e hora (Campo Grande)</dt><dd>${esc(dataLocal(c.data_hora))}</dd>
 <dt>Código da retirada</dt><dd>${esc(c.codigo)}</dd></dl>
 <h2>Checklist sanitário confirmado</h2><ul>${Object.values(ITENS).map((nome) => `<li>${nome}: sim</li>`).join('')}</ul>
@@ -97,6 +97,10 @@ h1{color:#1b5e20}dt{font-weight:bold;margin-top:12px}dd{margin:4px 0}code{overfl
 <p class="orientacao">Para imprimir ou salvar em PDF, use Imprimir no navegador (Ctrl+P).</p></html>`;
 }
 
+// Exibição em pt-BR (o hash continua calculado sobre o JSON canônico, que não muda).
+const cnpjBR = (d) => String(d ?? '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+const kgBR = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
 function paginaVerificacao(doacao) {
   // Exceção pública deliberada: não revelar nomes, CNPJs, IDs das partes, código,
   // alimento ou instante exato. O hash funciona como identificador não enumerável.
@@ -104,7 +108,7 @@ function paginaVerificacao(doacao) {
   return `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Verificação de comprovante</title><body style="font:18px system-ui;max-width:720px;margin:32px auto;padding:20px">
 <h1>Comprovante válido</h1><p>Doação registrada com checklist sanitário completo.</p>
-<p>Quantidade: ${esc(doacao.comprovante.quantidade_kg)} kg.</p>
+<p>Quantidade: ${esc(kgBR(doacao.comprovante.quantidade_kg))} kg.</p>
 <p>Hash SHA-256: <code style="overflow-wrap:anywhere">${esc(doacao.hash)}</code></p>
 <p>Integridade do registro verificada. Não é certificado ICP-Brasil.</p></body></html>`;
 }

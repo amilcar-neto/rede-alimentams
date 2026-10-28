@@ -47,7 +47,9 @@
   .lote.reservado { border-left-color: var(--azul); }
   .lote.expirado { border-left-color: #9e9e9e; opacity: .8; }
   .secao { margin: 18px 0 10px; font-size: 1rem; color: var(--suave); }
-  .miniatura { display: block; width: 100%; max-height: 150px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; background: var(--fundo); }
+  .miniatura { display: block; width: 100%; height: 120px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; background: var(--fundo); }
+  .sem-foto { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 120px; border-radius: 6px; margin-bottom: 8px; background: #f1f3f5; color: #9aa1a9; font-size: .78rem; }
+  .sem-foto svg { width: 32px; height: 32px; }
   .previa-foto { display: block; max-width: 220px; max-height: 160px; border-radius: 6px; margin-top: 8px; }
   .janela { margin-top: 8px; }
   .janela .linha2 { grid-template-columns: 1fr; gap: 0; }
@@ -296,7 +298,7 @@ function sair() {
   $('telaApp').classList.add('oculto'); $('sessao').classList.add('oculto');
   $('telaAuth').classList.remove('oculto');
   msg('erroLogin', ''); msg('erroCadastro', '');
-  $('cSenha').value = ''; $('cAceite').checked = false; $('cComprovante').value = '';
+  $('lSenha').value = ''; $('cSenha').value = ''; $('cAceite').checked = false; $('cComprovante').value = '';
   trocar(false);
 }
 
@@ -443,6 +445,9 @@ function textoJanela(l, agora = new Date()) {
   return `${dataBR(d1)} ${h1} – ${dataBR(d2)} ${h2}`;
 }
 
+// Placeholder neutro para lote sem foto (mesma altura da miniatura, para a grade ficar alinhada).
+const SEM_FOTO = `<div class="sem-foto" role="img" aria-label="Lote sem foto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/></svg>Sem foto</div>`;
+
 function cartaoLote(l, doador) {
   const reservado = l.status === 'reservado', expirado = l.status === 'expirado';
   let rodape = '';
@@ -472,11 +477,11 @@ function cartaoLote(l, doador) {
     rodape = `<div id="res${l.id}"><div class="acao">${tagValidade(l.dias)}<button onclick="abrirReserva(${l.id}, '${esc(l.validade)}'${ate})">Reservar retirada</button></div></div>`;
   }
   return `<article class="lote ${reservado ? 'reservado' : ''} ${expirado ? 'expirado' : ''}">
-    ${l.tem_foto ? `<img class="miniatura oculto" id="foto${Number(l.id)}" alt="Foto do lote: ${esc(l.alimento)}">` : ''}
+    ${l.tem_foto ? `<img class="miniatura oculto" id="foto${Number(l.id)}" alt="Foto do lote: ${esc(l.alimento)}">` : SEM_FOTO}
     <div class="topo"><div><h3>${esc(l.alimento)}</h3>
-      <div class="meta">${doador ? esc(l.categoria) : esc(l.doador)}</div></div>
+      ${doador ? '' : `<div class="meta">${esc(l.doador)}</div>`}</div>
       <div class="qtd">${kgBR(l.quantidade_kg)}<small style="font-size:.7rem;color:var(--suave)"> kg</small></div></div>
-    ${doador ? '' : `<div class="meta">Bairro: <b>${esc(l.bairro)}</b> · ${l.distancia_km} km de você</div>`}
+    ${doador ? '' : `<div class="meta">Bairro: <b>${esc(l.bairro)}</b> · ${kgBR(l.distancia_km)} km de você</div>`}
     <div class="meta">${esc(l.categoria)} · válido até <b>${dataBR(l.validade)}</b></div>
     ${l.retirada_ate ? `<div class="meta">retirar até <b>${esc(textoRetirada(l.retirada_ate))}</b></div>` : ''}
     ${doador && !expirado ? tagValidade(l.dias) : ''}

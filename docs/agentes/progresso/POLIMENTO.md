@@ -36,6 +36,17 @@ Ferramenta: claude, 28/10/2026, pedido direto do usuário ("quero o código redo
 - [x] `docker compose config`: válido.
 - [x] Com autorização explícita do usuário: `docker compose down -v` (volume antigo com schema anterior removido) e `docker compose up -d --build`. App em Node v24.22.1, `/saude` → `{"ok":true,"banco":true}`, fumaça `docs/testes/e2e-api.mjs` contra o container: **55/55**. O banco ficou com dados da fumaça: recriar antes do ensaio.
 
+## Conferência visual (Claude in Chrome, app no Docker, 28/10)
+
+- [x] Doador: painel, publicar lote (12,5 kg), cancelar lote com confirmação no cartão, "Lote cancelado".
+- [x] ONG: lista no raio, reservar com janela, código + QR, desistir da reserva (lote volta a disponível).
+- [x] Link do QR deslogado → aviso → login do doador → código preenchido; confirmar sem checklist recusado; com checklist → doação registrada e painel +12,5 kg.
+- [x] Comprovante (conteúdo conferido; aba blob não fotografável) e /verificar/:hash "Comprovante válido".
+- [x] Corrigido após a conferência: categoria duplicada no cartão do doador, distância com ponto (0.2 → 0,2), senha ficava no login após Sair, CNPJ cru e "12.50 kg" no comprovante/verificação.
+- [x] A pedido do usuário: removida do seed a miniatura sintética de frutas; lotes sem foto mostram placeholder neutro "Sem foto". Teste do seed reescrito para o novo comportamento; asserção "2.50 kg" do L04 passou a "2,5 kg" (mesma verificação, formato pt-BR).
+- [ ] Largura de celular: o redimensionamento da janela não teve efeito; conferir no ensaio.
+- `npm test`: 176/176.
+
 ## Próximo passo
 
 Recriar o banco de demonstração (schema mudou), refazer o ensaio visual e então tirar os prints definitivos.

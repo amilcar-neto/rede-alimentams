@@ -343,10 +343,15 @@ test('Front: botões de cancelar/desistir com confirmação no cartão, kg em pt
   await contexto.telaLotes();
   let tela = elementos.get('conteudo').innerHTML;
   assert.match(tela, />12,5<small/);
+  // Lote sem foto mostra o placeholder neutro, não uma imagem.
+  assert.equal(tela.split('class="sem-foto"').length - 1, 3);
+  assert.doesNotMatch(tela, /<img class="miniatura/);
   assert.match(tela, /perguntarCancelamento\(7, 'lote'\)/);
   assert.match(tela, /perguntarCancelamento\(8, 'lote'\)/);
   assert.doesNotMatch(tela, /perguntarCancelamento\(9/);
   assert.match(tela, /horário limite de retirada passou/);
+  // Categoria aparece uma vez por cartão (não repete embaixo do título).
+  assert.equal(tela.split('Panificados').length - 1, 3);
 
   contexto.perguntarCancelamento(7, 'lote');
   assert.match(elementos.get('canc7').innerHTML, /class="confirmacao"/);
@@ -357,14 +362,30 @@ test('Front: botões de cancelar/desistir com confirmação no cartão, kg em pt
 
   vm.runInContext("usuario = { perfil: 'receptora', nome: 'ONG' }", contexto);
   lotes = [{ id: 10, alimento: 'Minha', categoria: 'Panificados', quantidade_kg: '2.00', validade: '2026-10-29', status: 'reservado',
-    dias: 1, doador: 'Doador', bairro: 'Centro', distancia_km: '1.0', codigo: '123456', tolerancia_minutos: 45,
+    dias: 1, doador: 'Doador', bairro: 'Centro', distancia_km: '0.2', codigo: '123456', tolerancia_minutos: 45,
     janela_inicio: '2026-10-28T14:00', janela_fim: '2026-10-28T15:00' }];
   await contexto.telaLotes();
   tela = elementos.get('conteudo').innerHTML;
   assert.match(tela, /mais 45 min de tolerância/);
+  assert.match(tela, /0,2 km de você/);
   assert.match(tela, /perguntarCancelamento\(10, 'reserva'\)/);
   await contexto.cancelar(10, 'reserva');
   assert.ok(chamadas.some(([m, u]) => m === 'PUT' && u === '/lotes/10/cancelar-reserva'));
+});
+
+test('Comprovante e verificação exibem CNPJ formatado e kg em pt-BR (hash inalterado)', async () => {
+  const id = await publicar();
+  const ok = await confirmar(id, await reservar(id, esperanca));
+  assert.equal(ok.s, 200);
+  const html = await (await fetch(`http://127.0.0.1:3100/doacoes/${ok.d.doacao_id}/comprovante`, {
+    headers: { Authorization: 'Bearer ' + comper } })).text();
+  assert.match(html, /CNPJ: 00\.000\.001\/0001-36/);
+  assert.match(html, /CNPJ: 00\.000\.004\/0001-70/);
+  assert.match(html, /· 12,5 kg/);
+  assert.match(html, /&quot;quantidade_kg&quot;:&quot;12\.50&quot;/, 'JSON canônico do hash continua igual');
+  const verificacao = await (await fetch(`http://127.0.0.1:3100/verificar/${ok.d.hash}`)).text();
+  assert.match(verificacao, /Comprovante válido/);
+  assert.match(verificacao, /Quantidade: 12,5 kg/);
 });
 
 test('polimento: encerra a conexão de apoio com o banco de teste', () => db.end());

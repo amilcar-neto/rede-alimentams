@@ -149,11 +149,7 @@ SELECT doador_id, alimento, categoria, kg, validade, ((validade + 1)::timestamp 
  (1,'Iogurtes e queijos','Laticínios',15,      (now() AT TIME ZONE 'America/Campo_Grande')::date + 4)
   ) AS v(doador_id, alimento, categoria, kg, validade);
 
--- Miniatura sintética de demonstração (PNG 160×96, formas geométricas de frutas).
--- Não é fotografia de alimento real. Lote 3 com imagem; lotes 1, 2 e 4 sem imagem.
-UPDATE lotes SET foto_tipo = 'image/png',
-  foto = decode('89504e470d0a1a0a0000000d49484452000000a00000006008020000001545eece000002054944415478daeddd3f4ac44014c0e1398e07b0db461bef6227781e5b0bafe41904c1c6d262615964d99d4ce6cfcbe4835f95e691f9cabc21e9e7f74b13971c0160011660011660011660c0022cc0022cc0157b7cb93f05183060c0800103060cb8b4ef8fbbf3ce81cf9f03deb6eb4de089a5d34e683381e7634efbd1cd079ec938ed847629f034cc693fba65019e597702e34ec09f4f879c02ea6edd3805a12d60eea65b60fcfafe90d3b6810b681731c704cea4edc69c62eade34eeac9b635c40db8139c5a4bdce3c44f7baf14add76c629b8ee45e368c055741b19a7f8baff8c07ea5e34aea8dbc218f02ae0eabad58dd32674cf8de30037d2ad6b9cb6a27b6cb8eec9b8a96e4563c080c3e8c601eea05bcb1830e030ba4180bbe95631060c183060c0800103060c183060c0800187058e600c183060c080631af7f9501808b8bf7184a53b9f0be75cdce9b3ac130eb8a7719c9b0d5676004f04dc73ab32ceedc21d6d55f6dc8b0e753f78477bd1a38087dff0dffccd86b7e7437e8d746fce6da49bf9d61575179df6b1aec02d8cf347f7a7ad6b5ca03b00b82273c1dc21ba558ccb860e035e6f5c3c770df39aa1c5cc2b270e032e665e7fca4ba52b4e5cc45c65d660e045ccd50f7a0f85001660011660c0800103062cc0022cc0020c183060c08005588005588005183060c080f7002c3fa71460011660011660c0022cc002ace6fd0162fc9bfd8808a2b30000000049454e44ae426082', 'hex')
-WHERE id = 3;
+-- O seed não traz fotos: lotes sem foto aparecem com um placeholder neutro no front.
 
 INSERT INTO eventos_lote (lote_id, tipo, usuario_id)
 SELECT id, 'publicado', doador_id FROM lotes;

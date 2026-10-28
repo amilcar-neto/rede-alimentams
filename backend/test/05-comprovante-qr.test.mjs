@@ -255,7 +255,7 @@ test('L04 verificar é público e mínimo; hash alterado/inválido/injeção →
   assert.equal(r.status, 200);
   const html = await r.text();
   assert.match(html, /Comprovante válido/);
-  assert.match(html, /2\.50 kg/);
+  assert.match(html, /2,5 kg/);
   // Remover o hash evita coincidência acidental de código numérico em sua sequência.
   const resumo = html.replaceAll(doacao.hash, '');
   for (const privado of [codigo, doacao.comprovante.alimento, 'Comper', 'Esperança', '00000001000136', '00000004000170', '@demo.com'])

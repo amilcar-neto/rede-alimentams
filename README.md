@@ -81,7 +81,7 @@ Senha de todas as contas: `123456`. CNPJs são sintéticos.
 | Receptora fora do raio de 10 km | longe@demo.com |
 
 O seed cria:
-- 4 lotes disponíveis (validade hoje, amanhã, +2 e +4 dias), com horário limite no fim do dia da validade; “Frutas variadas” (id 3) tem miniatura PNG geométrica sintética, e os demais não têm foto. A miniatura não é fotografia de alimento real;
+- 4 lotes disponíveis (validade hoje, amanhã, +2 e +4 dias), com horário limite no fim do dia da validade; nenhum lote do seed tem foto (os cartões mostram um placeholder neutro “Sem foto”);
 - histórico de 30 dias: 16 doações entregues, com eventos e comprovantes de hash verificável, de modo que os indicadores já abrem com números;
 - 1 reserva perto de expirar (Padaria Pão Nosso → Casa de Apoio Esperança, código `482915`, janela termina ~25 min após a criação do banco). Depois da janela mais a tolerância, o lote volta a ficar disponível na primeira consulta.
 
