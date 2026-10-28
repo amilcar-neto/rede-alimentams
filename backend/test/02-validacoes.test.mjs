@@ -14,6 +14,8 @@ const validar = require('../src/validacao.js');
 const cadastro = {
   nome: 'Entidade sintética L01', email: 'validacoes.l01@example.test', senha: '123456',
   perfil: 'receptora', bairro: 'Centro', cnpj: '11.222.333/0001-81',
+  // Contrato L06: endereço, responsável, telefone e aceite obrigatório dos termos.
+  endereco: 'Rua Sintética, 10', responsavel: 'Responsável Sintético', telefone: '(67) 99999-0001', aceite_termos: true,
 };
 const lote = { alimento: 'Alimento L01', categoria: 'Panificados', quantidade_kg: 1, validade: dia(2), retirada_ate: retiradaAte(dia(2)) };
 const tipos = ['inválido', 123, null, [], {}, true, undefined, '   ', '\0', 'x'.repeat(300)];
@@ -35,7 +37,9 @@ test('L01 fuzz de cada campo de cadastro rejeita tipos/valores inválidos com JS
   for (const campo of Object.keys(cadastro)) {
     for (const valor of tipos) {
       // Nome e senha são textos livres; estes valores textuais são válidos.
-      if (['nome', 'senha'].includes(campo) && valor === 'inválido') continue;
+      if (['nome', 'senha', 'endereco', 'responsavel'].includes(campo) && valor === 'inválido') continue;
+      // O aceite só vale como o booleano true.
+      if (campo === 'aceite_termos' && valor === true) continue;
       erroJson(await call('POST', '/auth/register', { ...cadastro, [campo]: valor }));
     }
   }

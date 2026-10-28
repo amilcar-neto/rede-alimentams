@@ -10,9 +10,27 @@ CREATE TABLE usuarios (
   cnpj          TEXT,
   bairro        TEXT NOT NULL,
   localizacao   geography(Point, 4326) NOT NULL,
+  -- Cadastro completo (L06): contato do responsável e aceite do Termo de Responsabilidade e da
+  -- Política de Privacidade (instante e versão aceitos). telefone guarda só os dígitos (DDD + número).
+  endereco          TEXT NOT NULL,
+  responsavel       TEXT NOT NULL,
+  telefone          TEXT NOT NULL CHECK (telefone ~ '^[1-9][0-9][2-9][0-9]{7,8}$'),
+  aceite_termos_em  TIMESTAMPTZ NOT NULL,
+  termos_versao     TEXT NOT NULL,
+  -- Situação do cadastro: aprovado por padrão; o extra X1 usa 'pendente' e 'rejeitado'.
+  situacao      TEXT NOT NULL DEFAULT 'aprovado' CHECK (situacao IN ('aprovado','pendente','rejeitado')),
   criado_em     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_usuarios_geo ON usuarios USING GIST (localizacao);
+
+-- Comprovante de entidade sem fins lucrativos (L06): PDF/JPEG/PNG de até 1 MB, tipo validado pelo
+-- servidor. Um por entidade; só a própria entidade o lê.
+CREATE TABLE comprovantes_entidade (
+  usuario_id  INT PRIMARY KEY REFERENCES usuarios(id),
+  arquivo     BYTEA NOT NULL CHECK (octet_length(arquivo) <= 1048576),
+  tipo        TEXT NOT NULL CHECK (tipo IN ('application/pdf','image/jpeg','image/png')),
+  enviado_em  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 CREATE TABLE lotes (
   id             SERIAL PRIMARY KEY,
@@ -93,19 +111,26 @@ FOR EACH STATEMENT EXECUTE FUNCTION impedir_alteracao_doacao();
 -- ===== Dados de demonstração (senha de todos: 123456) =====
 -- CNPJs numéricos sintéticos com dígitos verificadores, sem consulta cadastral.
 -- Coordenadas aproximadas de bairros de Campo Grande/MS
-INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao) VALUES
+INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao,
+                      endereco, responsavel, telefone, aceite_termos_em, termos_versao) VALUES
  ('Supermercado Comper - Centro','comper@demo.com', crypt('123456', gen_salt('bf')),'doador','00000001000136','Centro',
-   ST_SetSRID(ST_MakePoint(-54.6201,-20.4697),4326)::geography),
+   ST_SetSRID(ST_MakePoint(-54.6201,-20.4697),4326)::geography,
+   'Rua Exemplo, 100 (fictício)', 'Responsável Demo Comper', '6733330001', now(), '2026-10-v1'),
  ('Restaurante Sabor MS','sabor@demo.com', crypt('123456', gen_salt('bf')),'doador','00000002000180','Jardim dos Estados',
-   ST_SetSRID(ST_MakePoint(-54.5870,-20.4540),4326)::geography),
+   ST_SetSRID(ST_MakePoint(-54.5870,-20.4540),4326)::geography,
+   'Rua Exemplo, 200 (fictício)', 'Responsável Demo Sabor', '6733330002', now(), '2026-10-v1'),
  ('Padaria Pão Nosso','pao@demo.com', crypt('123456', gen_salt('bf')),'doador','00000003000125','Monte Castelo',
-   ST_SetSRID(ST_MakePoint(-54.5953,-20.4553),4326)::geography),
+   ST_SetSRID(ST_MakePoint(-54.5953,-20.4553),4326)::geography,
+   'Rua Exemplo, 300 (fictício)', 'Responsável Demo Pão Nosso', '6733330003', now(), '2026-10-v1'),
  ('Casa de Apoio Esperança','esperanca@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000004000170','Monte Castelo',
-   ST_SetSRID(ST_MakePoint(-54.5960,-20.4570),4326)::geography),
+   ST_SetSRID(ST_MakePoint(-54.5960,-20.4570),4326)::geography,
+   'Rua Exemplo, 400 (fictício)', 'Responsável Demo Esperança', '6733330004', now(), '2026-10-v1'),
  ('Cozinha Solidária Amambai','amambai@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000005000114','Amambai',
-   ST_SetSRID(ST_MakePoint(-54.6070,-20.4830),4326)::geography),
+   ST_SetSRID(ST_MakePoint(-54.6070,-20.4830),4326)::geography,
+   'Rua Exemplo, 500 (fictício)', 'Responsável Demo Amambai', '6733330005', now(), '2026-10-v1'),
  ('Associação Longe Demais','longe@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000006000169','Distrito distante',
-   ST_SetSRID(ST_MakePoint(-54.9000,-20.9000),4326)::geography);
+   ST_SetSRID(ST_MakePoint(-54.9000,-20.9000),4326)::geography,
+   'Rua Exemplo, 600 (fictício)', 'Responsável Demo Longe', '6733330006', now(), '2026-10-v1');
 
 -- retirada_ate = fim do dia da validade (00:00 do dia seguinte, horário de Campo Grande).
 INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, retirada_ate)

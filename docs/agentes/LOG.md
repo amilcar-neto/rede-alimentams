@@ -175,3 +175,12 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Conferência visual parcial pelo Claude in Chrome (publicar com foto, miniatura, "retirar até", reserva limitada). **Conferência visual humana PENDENTE** (arquivo injetado por script, sem prints, sem mobile; roteiro no [checklist L03](progresso/L03.md)). Servidor manual encerrado.
 - Limitações: bancos existentes exigem recriação (sem migração); seed sem fotos; `docs/testes/e2e-api.mjs` histórico não atualizado; revisão independente pendente.
 - Próximo passo: controlador repete testes e chama revisão por risco (anexos e acesso a dados).
+
+## 28/10/2026 — L06 — implementação claude
+
+- Executor único, sem subagentes; branch `lote/L06`, Git limpo no início. Sem commits, staging, .git/.agentes/controlador/plano, VPS, publicação ou dados reais. Modelo/esforço: `nao_verificado`.
+- Entregue: cadastro com endereço, responsável, telefone (só dígitos) e aceite obrigatório (`aceite_termos: true`; gravado `aceite_termos_em` e versão do termo); `situacao` (padrão `aprovado`); `termos.html` com citações legais `[VERIFICAR]` e contato `[GRUPO]`; anexo de comprovante de entidade (PDF/JPEG/PNG ≤ 1 MB, tipo pela assinatura) em `PUT/GET /perfil/comprovante`, só a própria ONG lê; `GET /perfil`; `/indicadores` com entidades, TMR (meta < 90 min) e TEC (meta > 92%); `GET /indicadores/meus`; front com painel de metas e aba "Meus números".
+- Testes: `npm.cmd test` em backend/ (banco `alimentams_test`): código 0, **156 pass / 0 fail / 0 skipped / 0 todo / 0 cancelled**, ~38 s, repetido após o último ajuste do front. Novo `07-cadastro-kpis.test.mjs` (18 testes: sem aceite 400, anexos inválidos 400, 1 MB exato, 401/403, leitura só do próprio, TMR/TEC contra dados controlados e contra SQL independente, "Meus números" isolado por usuário, front). Testes de cadastro dos lotes anteriores adaptados só ao novo contrato.
+- Conferência visual parcial pelo Claude in Chrome (cadastro, máscaras, erro sem aceite, anexo, painel, termos). **Conferência visual humana PENDENTE** (seletor nativo de arquivos, abrir comprovante, celular; roteiro no [checklist L06](progresso/L06.md)). Servidor manual encerrado.
+- Limitações: bancos existentes exigem recriação; TMR do seed começa acima da meta; `e2e-api.mjs` histórico desatualizado; texto legal sem revisão jurídica; revisão independente pendente.
+- Próximo passo: controlador repete testes e chama revisão por risco (anexos e acesso a dados).

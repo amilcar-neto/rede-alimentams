@@ -25,11 +25,18 @@ app.use((req, res, next) => {
   });
   next();
 });
-// O corpo de POST /lotes pode levar a foto em base64 (400 KB viram ~547 mil caracteres); as demais rotas
-// mantêm o limite padrão pequeno.
+// O corpo de POST /lotes pode levar a foto em base64 (400 KB viram ~547 mil caracteres) e o de
+// PUT /perfil/comprovante o comprovante da entidade (1 MB vira ~1,4 milhão); as demais rotas mantêm
+// o limite padrão pequeno. O envio do comprovante só é lido depois de autenticado.
 const jsonPadrao = express.json();
 const jsonLote = express.json({ limit: '700kb' });
-app.use((req, res, next) => (req.method === 'POST' && req.path === '/lotes' ? jsonLote : jsonPadrao)(req, res, next));
+const jsonComprovante = express.json({ limit: '1500kb' });
+app.use((req, res, next) => {
+  if (req.method === 'POST' && req.path === '/lotes') return jsonLote(req, res, next);
+  if (req.method === 'PUT' && req.path === '/perfil/comprovante')
+    return autenticar(req, res, () => jsonComprovante(req, res, next));
+  return jsonPadrao(req, res, next);
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -72,6 +79,10 @@ const BAIRROS = {
 
 // Fatores de conversão do painel (mesmos do protótipo, apenas demonstrativos)
 const FATORES = { refeicoes: 2, co2: 2.5, agua: 350 };
+// Metas do painel: TMR (tempo médio de reserva) abaixo de 90 min; TEC (taxa de entrega concluída) acima de 92%.
+const METAS = { tmr_minutos: 90, tec_percentual: 92 };
+// Versão do Termo de Responsabilidade e da Política de Privacidade (backend/public/termos.html) aceita no cadastro.
+const TERMOS_VERSAO = '2026-10-v1';
 
 const rota = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
@@ -104,22 +115,28 @@ const gerarToken = (u) =>
 app.get('/bairros', (req, res) => res.json(Object.keys(BAIRROS)));
 
 app.post('/auth/register', rota(async (req, res) => {
-  const b = validar.corpo(req.body, ['nome', 'email', 'senha', 'perfil', 'cnpj', 'bairro']);
+  const b = validar.corpo(req.body, ['nome', 'email', 'senha', 'perfil', 'cnpj', 'endereco', 'responsavel', 'telefone',
+    'bairro', 'aceite_termos']);
   const nome = validar.texto(b.nome, 'Nome', 200);
   const email = validar.email(b.email);
   const senha = validar.senha(b.senha);
   const perfil = validar.opcao(b.perfil, 'Perfil', ['doador', 'receptora']);
   const cnpj = validar.cnpj(b.cnpj);
+  const endereco = validar.texto(b.endereco, 'Endereço', 250);
+  const responsavel = validar.texto(b.responsavel, 'Responsável', 200);
+  const telefone = validar.telefone(b.telefone);
   const bairro = validar.opcao(b.bairro, 'Bairro', Object.keys(BAIRROS));
+  validar.aceite(b.aceite_termos);
   const coord = BAIRROS[bairro];
 
   const hash = await bcrypt.hash(senha, 10);
   try {
     const r = await pool.query(
-      `INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao)
-       VALUES ($1,$2,$3,$4,$5,$6, ST_SetSRID(ST_MakePoint($7,$8),4326)::geography)
+      `INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao,
+                             endereco, responsavel, telefone, aceite_termos_em, termos_versao)
+       VALUES ($1,$2,$3,$4,$5,$6, ST_SetSRID(ST_MakePoint($7,$8),4326)::geography, $9,$10,$11, now(), $12)
        RETURNING id, nome, perfil`,
-      [nome, email, hash, perfil, cnpj, bairro, coord[0], coord[1]]
+      [nome, email, hash, perfil, cnpj, bairro, coord[0], coord[1], endereco, responsavel, telefone, TERMOS_VERSAO]
     );
     res.status(201).json({ token: gerarToken(r.rows[0]), usuario: r.rows[0] });
   } catch (e) {
@@ -139,6 +156,43 @@ app.post('/auth/login', rota(async (req, res) => {
   if (!u || !(await bcrypt.compare(senha, u.senha_hash)))
     return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
   res.json({ token: gerarToken(u), usuario: { id: u.id, nome: u.nome, perfil: u.perfil } });
+}));
+
+// ---------- Perfil e comprovante de entidade (L06) ----------
+// Dados do próprio usuário; nada de outros cadastros.
+app.get('/perfil', autenticar, rota(async (req, res) => {
+  const r = await pool.query(
+    `SELECT u.id, u.nome, u.email, u.perfil, u.cnpj, u.endereco, u.responsavel, u.telefone, u.bairro, u.situacao,
+            u.aceite_termos_em, u.termos_versao, c.tipo AS comprovante_tipo, c.enviado_em AS comprovante_enviado_em,
+            (c.usuario_id IS NOT NULL) AS tem_comprovante
+       FROM usuarios u LEFT JOIN comprovantes_entidade c ON c.usuario_id = u.id
+      WHERE u.id = $1`,
+    [req.usuario.id]
+  );
+  if (!r.rows.length) return res.status(404).json({ erro: 'Cadastro não encontrado.' });
+  res.json(r.rows[0]);
+}));
+
+// A entidade receptora anexa (ou substitui) o comprovante de entidade sem fins lucrativos.
+app.put('/perfil/comprovante', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
+  const b = validar.corpo(req.body, ['arquivo']);
+  const arquivo = validar.comprovante(b.arquivo);
+  const r = await pool.query(
+    `INSERT INTO comprovantes_entidade (usuario_id, arquivo, tipo) VALUES ($1,$2,$3)
+     ON CONFLICT (usuario_id) DO UPDATE SET arquivo = EXCLUDED.arquivo, tipo = EXCLUDED.tipo, enviado_em = now()
+     RETURNING tipo, enviado_em, octet_length(arquivo) AS tamanho`,
+    [req.usuario.id, arquivo.dados, arquivo.tipo]
+  );
+  res.json({ ok: true, ...r.rows[0] });
+}));
+
+// Só a própria entidade lê o arquivo (não há perfil administrador nesta versão).
+app.get('/perfil/comprovante', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
+  const r = await pool.query('SELECT arquivo, tipo FROM comprovantes_entidade WHERE usuario_id = $1', [req.usuario.id]);
+  if (!r.rows.length) return res.status(404).json({ erro: 'Nenhum comprovante anexado.' });
+  const extensao = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png' }[r.rows[0].tipo];
+  res.set({ 'Cache-Control': 'private, no-store', 'Content-Disposition': `attachment; filename="comprovante-entidade.${extensao}"` })
+    .type(r.rows[0].tipo).send(r.rows[0].arquivo);
 }));
 
 // ---------- Notificações (L05) ----------
@@ -509,20 +563,66 @@ app.get('/doacoes', autenticar, rota(async (req, res) => {
   res.json(r.rows);
 }));
 
-app.get('/indicadores', autenticar, rota(async (req, res) => {
+// kg, refeições, CO₂e, água, entidades beneficiadas, TMR e TEC. `doador` e `receptora` restringem o cálculo
+// às doações e lotes de um usuário (null = todos).
+//  - TMR: média de (reservado_em − criado_em) em minutos, sobre os lotes com reserva registrada.
+//  - TEC: entregues ÷ (entregues + expirados), em %, sobre os lotes já encerrados.
+// Sem dados o valor é null (e a meta não é avaliada).
+async function calcularIndicadores(doador, receptora) {
   const r = await pool.query(
-    `SELECT COALESCE(SUM(quantidade_kg),0)::float AS kg, COUNT(DISTINCT receptor_id)::int AS entidades,
-            COUNT(*)::int AS doacoes FROM doacoes`
+    `SELECT
+       (SELECT COALESCE(SUM(quantidade_kg),0)::float FROM doacoes
+         WHERE ($1::int IS NULL OR doador_id = $1) AND ($2::int IS NULL OR receptor_id = $2)) AS kg,
+       (SELECT COUNT(*)::int FROM doacoes
+         WHERE ($1::int IS NULL OR doador_id = $1) AND ($2::int IS NULL OR receptor_id = $2)) AS doacoes,
+       (SELECT COUNT(DISTINCT receptor_id)::int FROM doacoes
+         WHERE ($1::int IS NULL OR doador_id = $1) AND ($2::int IS NULL OR receptor_id = $2)) AS entidades,
+       (SELECT COUNT(DISTINCT doador_id)::int FROM doacoes
+         WHERE ($1::int IS NULL OR doador_id = $1) AND ($2::int IS NULL OR receptor_id = $2)) AS doadores,
+       l.tmr, l.entregues, l.expirados
+     FROM (SELECT AVG(EXTRACT(EPOCH FROM reservado_em - criado_em) / 60)::float AS tmr,
+                  COUNT(*) FILTER (WHERE status = 'entregue')::int AS entregues,
+                  COUNT(*) FILTER (WHERE status = 'expirado')::int AS expirados
+             FROM lotes
+            WHERE ($1::int IS NULL OR doador_id = $1) AND ($2::int IS NULL OR reservado_por = $2)) l`,
+    [doador, receptora]
   );
-  const { kg, entidades, doacoes } = r.rows[0];
-  res.json({
-    kg,
-    entidades,
-    doacoes,
-    refeicoes: Math.round(kg * FATORES.refeicoes),
-    co2: Math.round(kg * FATORES.co2),
-    agua: Math.round(kg * FATORES.agua),
-  });
+  const x = r.rows[0];
+  const encerrados = x.entregues + x.expirados;
+  const arredondar = (n) => Math.round(n * 10) / 10;
+  const tmr = x.tmr === null ? null : arredondar(x.tmr);
+  const tec = encerrados ? arredondar((x.entregues / encerrados) * 100) : null;
+  return {
+    kg: x.kg,
+    entidades: x.entidades,
+    doadores: x.doadores,
+    doacoes: x.doacoes,
+    refeicoes: Math.round(x.kg * FATORES.refeicoes),
+    co2: Math.round(x.kg * FATORES.co2),
+    agua: Math.round(x.kg * FATORES.agua),
+    tmr_minutos: tmr,
+    tec_percentual: tec,
+    entregues: x.entregues,
+    expirados: x.expirados,
+    metas: {
+      ...METAS,
+      tmr_atingida: tmr === null ? null : tmr < METAS.tmr_minutos,
+      tec_atingida: tec === null ? null : tec > METAS.tec_percentual,
+    },
+  };
+}
+
+app.get('/indicadores', autenticar, rota(async (req, res) => {
+  await atualizarStatus();
+  res.json(await calcularIndicadores(null, null));
+}));
+
+// "Meus números": só as doações e lotes do próprio usuário, conforme o perfil.
+app.get('/indicadores/meus', autenticar, rota(async (req, res) => {
+  await atualizarStatus();
+  const doador = req.usuario.perfil === 'doador';
+  const idUsuario = req.usuario.id;
+  res.json({ perfil: req.usuario.perfil, ...(await calcularIndicadores(doador ? idUsuario : null, doador ? null : idUsuario)) });
 }));
 
 // Falhas do parser não passam pelas rotas. Não expor o corpo recebido ou stack.
@@ -533,6 +633,8 @@ app.use((erro, req, res, next) => {
     return res.status(400).json({ erro: 'JSON malformado. Envie um objeto JSON válido.' });
   if (erro.type === 'entity.too.large' && req.method === 'POST' && req.path === '/lotes')
     return res.status(400).json({ erro: 'A requisição é grande demais. A foto pode ter no máximo 400 KB.' });
+  if (erro.type === 'entity.too.large' && req.method === 'PUT' && req.path === '/perfil/comprovante')
+    return res.status(400).json({ erro: 'A requisição é grande demais. O comprovante pode ter no máximo 1 MB.' });
   if (erro.type === 'entity.too.large')
     return res.status(413).json({ erro: 'O corpo da requisição excede o tamanho permitido.' });
   if (erro.type === 'charset.unsupported' || erro.type === 'encoding.unsupported')

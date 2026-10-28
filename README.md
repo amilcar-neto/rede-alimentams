@@ -33,9 +33,10 @@ Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXE
 - QR Code de retirada (link para o app com lote e código preenchidos) e confirmação pelo doador com checklist sanitário.
 - Comprovante digital com hash SHA-256 e página pública de verificação (`/verificar/:hash`). Não é certificado ICP-Brasil.
 - Notificações em tempo real por WebSocket (`/ws`) e central de notificações; sem WebSocket a consulta HTTP continua valendo.
-- Indicadores globais (kg, refeições, CO₂, água) e histórico de doações.
+- Cadastro completo (endereço, responsável, telefone) com aceite obrigatório do Termo de Responsabilidade e da Política de Privacidade (`/termos.html`; citações legais marcadas `[VERIFICAR]`, texto sem revisão jurídica); a ONG pode anexar o comprovante de entidade sem fins lucrativos (PDF/JPEG/PNG ≤ 1 MB, tipo validado pelo conteúdo).
+- Indicadores globais (kg, refeições, CO₂, água, entidades beneficiadas, TMR com meta < 90 min e TEC com meta > 92%), aba "Meus números" por perfil e histórico de doações.
 - A foto só é entregue ao doador dono e a quem pode ver o lote (`GET /lotes/:id/foto`, com token).
-- Fora desta versão: relatórios/admin (L06) e e-mail.
+- Fora desta versão: painel administrativo (aprovação de cadastros, coluna `situacao` reservada ao extra X1) e e-mail.
 
 ## Como rodar
 
@@ -98,7 +99,7 @@ Os instantes são relativos ao momento da criação do banco; para reiniciar a d
 |---|---|---|
 | GET | /saude | público |
 | GET | /bairros | público |
-| POST | /auth/register, /auth/login | público |
+| POST | /auth/register, /auth/login | público (cadastro exige endereço, responsável, telefone e `aceite_termos: true`) |
 | GET | /verificar/:hash | público (dados mínimos) |
 | GET | /lotes | doador / receptora |
 | POST | /lotes | doador (`retirada_ate` obrigatório; `foto` base64 opcional) |
@@ -106,7 +107,11 @@ Os instantes são relativos ao momento da criação do banco; para reiniciar a d
 | PUT | /lotes/:id/reservar | receptora |
 | GET | /lotes/:id/qrcode | receptora que reservou |
 | PUT | /lotes/:id/confirmar-retirada | doador |
-| GET | /doacoes, /indicadores | autenticado |
+| GET | /doacoes | autenticado |
+| GET | /indicadores | autenticado (painel global: kg, refeições, CO₂e, água, entidades, TMR e TEC com metas) |
+| GET | /indicadores/meus | autenticado (os mesmos números, só do próprio usuário) |
+| GET | /perfil | autenticado (próprio cadastro) |
+| PUT, GET | /perfil/comprovante | receptora (anexo PDF/JPEG/PNG ≤ 1 MB em base64; só a própria entidade lê) |
 | GET | /doacoes/:id/comprovante | doador ou receptora da doação |
 | GET | /notificacoes | autenticado (apenas as próprias) |
 | PUT | /notificacoes/lidas, /notificacoes/:id/lida | autenticado (apenas as próprias) |

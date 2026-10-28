@@ -95,22 +95,61 @@ function dataHora(valor, campo) {
   return entrada;
 }
 
+// Decodifica base64 puro (sem prefixo data:) com limite de tamanho; o chamador identifica o tipo pela assinatura.
+function bytesBase64(valor, maximo, mensagemTamanho, mensagemInvalida) {
+  const maximoBase64 = Math.ceil(maximo / 3) * 4;
+  if (valor.length > maximoBase64) falhar(mensagemTamanho);
+  if (valor.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(valor)) falhar(mensagemInvalida);
+  const dados = Buffer.from(valor, 'base64');
+  if (dados.length > maximo) falhar(mensagemTamanho);
+  return dados;
+}
+const ehJpeg = (d) => d.length >= 3 && d[0] === 0xff && d[1] === 0xd8 && d[2] === 0xff;
+const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const ehPng = (d) => d.length > ASSINATURA_PNG.length && d.subarray(0, 8).equals(ASSINATURA_PNG);
+const ehPdf = (d) => d.length > 8 && /^%PDF-[12]\.\d/.test(d.subarray(0, 8).toString('latin1'));
+
 // Foto do lote (L03): base64 puro de JPEG ou PNG, até 400 KB. O tipo vem da assinatura dos bytes,
 // nunca do que o cliente declara. Ausente ou null = lote sem foto.
 const FOTO_MAX_BYTES = 400 * 1024;
-const FOTO_MAX_BASE64 = Math.ceil(FOTO_MAX_BYTES / 3) * 4;
-const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 function foto(valor) {
   if (valor === undefined || valor === null) return null;
   if (typeof valor !== 'string' || !valor) falhar('A foto deve ser uma imagem JPEG ou PNG em base64.');
-  if (valor.length > FOTO_MAX_BASE64) falhar('A foto deve ter no máximo 400 KB.');
-  if (valor.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(valor))
-    falhar('Foto inválida: envie a imagem JPEG ou PNG em base64, sem prefixo.');
-  const dados = Buffer.from(valor, 'base64');
-  if (dados.length > FOTO_MAX_BYTES) falhar('A foto deve ter no máximo 400 KB.');
-  if (dados.length >= 3 && dados[0] === 0xff && dados[1] === 0xd8 && dados[2] === 0xff) return { dados, tipo: 'image/jpeg' };
-  if (dados.length > ASSINATURA_PNG.length && dados.subarray(0, 8).equals(ASSINATURA_PNG)) return { dados, tipo: 'image/png' };
+  const dados = bytesBase64(valor, FOTO_MAX_BYTES, 'A foto deve ter no máximo 400 KB.',
+    'Foto inválida: envie a imagem JPEG ou PNG em base64, sem prefixo.');
+  if (ehJpeg(dados)) return { dados, tipo: 'image/jpeg' };
+  if (ehPng(dados)) return { dados, tipo: 'image/png' };
   return falhar('O arquivo enviado não é uma imagem JPEG ou PNG válida.');
+}
+
+// Comprovante de entidade sem fins lucrativos (L06): PDF, JPEG ou PNG em base64, até 1 MB, tipo pela assinatura.
+const COMPROVANTE_MAX_BYTES = 1024 * 1024;
+function comprovante(valor) {
+  if (typeof valor !== 'string' || !valor) falhar('O comprovante deve ser um arquivo PDF, JPEG ou PNG em base64.');
+  const dados = bytesBase64(valor, COMPROVANTE_MAX_BYTES, 'O comprovante deve ter no máximo 1 MB.',
+    'Comprovante inválido: envie o arquivo PDF, JPEG ou PNG em base64, sem prefixo.');
+  if (ehPdf(dados)) return { dados, tipo: 'application/pdf' };
+  if (ehJpeg(dados)) return { dados, tipo: 'image/jpeg' };
+  if (ehPng(dados)) return { dados, tipo: 'image/png' };
+  return falhar('O arquivo enviado não é um PDF, JPEG ou PNG válido.');
+}
+
+// Telefone brasileiro: aceita máscara e +55; guarda só DDD + número (10 ou 11 dígitos).
+function telefone(valor) {
+  const entrada = texto(valor, 'Telefone', 20);
+  if (!/^(?:\+?55\s?)?(?:\(\d{2}\)|\d{2})\s?\d{4,5}-?\d{4}$/.test(entrada)) falhar('Telefone inválido. Informe DDD e número.');
+  let digitos = entrada.replace(/\D/g, '');
+  if (digitos.length > 11 && digitos.startsWith('55')) digitos = digitos.slice(2);
+  if (!/^[1-9]\d[2-9]\d{7,8}$/.test(digitos) || (digitos.length === 11 && digitos[2] !== '9'))
+    falhar('Telefone inválido. Informe DDD e número.');
+  return digitos;
+}
+
+// O aceite do Termo de Responsabilidade e da Política de Privacidade só vale como o booleano true.
+function aceite(valor) {
+  if (valor !== true)
+    falhar('É obrigatório aceitar o Termo de Responsabilidade e a Política de Privacidade.');
+  return true;
 }
 
 function id(valor) {
@@ -125,4 +164,4 @@ function codigo(valor) {
   return normalizado;
 }
 
-module.exports = { ErroValidacao, corpo, texto, opcao, email, senha, cnpj, CATEGORIAS, quantidade, data, dataHora, foto, FOTO_MAX_BYTES, id, codigo };
+module.exports = { ErroValidacao, corpo, texto, opcao, email, senha, cnpj, CATEGORIAS, quantidade, data, dataHora, foto, FOTO_MAX_BYTES, comprovante, COMPROVANTE_MAX_BYTES, telefone, aceite, id, codigo };
