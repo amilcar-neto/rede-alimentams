@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { createServer, request } from 'node:http';
 import { once } from 'node:events';
-import { call, login, dia, janela, checklist } from './helpers.mjs';
+import { call, login, dia, janela, checklist, retiradaAte } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 const require = createRequire(import.meta.url);
@@ -21,7 +21,7 @@ const raw = (path, token) => fetch('http://127.0.0.1:3100' + path, {
   headers: token ? { Authorization: 'Bearer ' + token } : {}, signal: AbortSignal.timeout(10000),
 });
 async function preparar(alimento = 'L04 <img src=x onerror=alert(1)> & frutas') {
-  const p = await call('POST', '/lotes', { alimento, categoria: 'Hortifrúti', quantidade_kg: 2.5, validade: dia(2) }, comper);
+  const p = await call('POST', '/lotes', { alimento, categoria: 'Hortifrúti', quantidade_kg: 2.5, validade: dia(2), retirada_ate: retiradaAte(dia(2)) }, comper);
   assert.equal(p.s, 201);
   const r = await call('PUT', `/lotes/${p.d.id}/reservar`, janela(), esp);
   assert.equal(r.s, 200);

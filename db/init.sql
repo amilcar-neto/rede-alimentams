@@ -28,8 +28,16 @@ CREATE TABLE lotes (
   codigo         CHAR(6),
   janela_inicio  TIMESTAMPTZ,
   janela_fim     TIMESTAMPTZ,
+  -- Horário limite de retirada (L03): até o fim do dia da validade; a janela da reserva respeita este limite.
+  retirada_ate   TIMESTAMPTZ NOT NULL,
+  -- Foto opcional (L03): JPEG/PNG de até 400 KB, validada pelo servidor; a listagem não carrega os bytes.
+  foto           BYTEA,
+  foto_tipo      TEXT,
   criado_em      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CHECK ((janela_inicio IS NULL) = (janela_fim IS NULL))
+  CHECK ((janela_inicio IS NULL) = (janela_fim IS NULL)),
+  CHECK ((foto IS NULL) = (foto_tipo IS NULL)),
+  CHECK (foto_tipo IS NULL OR foto_tipo IN ('image/jpeg','image/png')),
+  CHECK (foto IS NULL OR octet_length(foto) <= 409600)
 );
 CREATE INDEX idx_lotes_status ON lotes (status);
 
@@ -99,11 +107,15 @@ INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao
  ('Associação Longe Demais','longe@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000006000169','Distrito distante',
    ST_SetSRID(ST_MakePoint(-54.9000,-20.9000),4326)::geography);
 
-INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade) VALUES
+-- retirada_ate = fim do dia da validade (00:00 do dia seguinte, horário de Campo Grande).
+INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, retirada_ate)
+SELECT doador_id, alimento, categoria, kg, validade, ((validade + 1)::timestamp AT TIME ZONE 'America/Campo_Grande')
+  FROM (VALUES
  (2,'Marmitas do dia','Refeições prontas',18, (now() AT TIME ZONE 'America/Campo_Grande')::date),
  (3,'Pães e panificados','Panificados',8,      (now() AT TIME ZONE 'America/Campo_Grande')::date + 1),
  (1,'Frutas variadas','Hortifrúti',50,         (now() AT TIME ZONE 'America/Campo_Grande')::date + 2),
- (1,'Iogurtes e queijos','Laticínios',15,      (now() AT TIME ZONE 'America/Campo_Grande')::date + 4);
+ (1,'Iogurtes e queijos','Laticínios',15,      (now() AT TIME ZONE 'America/Campo_Grande')::date + 4)
+  ) AS v(doador_id, alimento, categoria, kg, validade);
 
 INSERT INTO eventos_lote (lote_id, tipo, usuario_id)
 SELECT id, 'publicado', doador_id FROM lotes;
@@ -136,10 +148,10 @@ WITH h(n, doador_id, receptor_id, alimento, categoria, kg, dias, hora) AS (VALUE
     FROM h
 ), l AS (
   INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, status, reservado_por, reservado_em,
-                     codigo, janela_inicio, janela_fim, criado_em)
+                     codigo, janela_inicio, janela_fim, retirada_ate, criado_em)
   SELECT doador_id, alimento, categoria, kg, (entrega AT TIME ZONE 'America/Campo_Grande')::date, 'entregue', receptor_id,
          entrega - interval '2 hours', codigo, entrega - interval '1 hour', entrega + interval '30 minutes',
-         entrega - interval '5 hours'
+         entrega + interval '2 hours', entrega - interval '5 hours'
     FROM t ORDER BY n
   RETURNING id, codigo
 ), ev AS (
@@ -178,10 +190,12 @@ SELECT lote_id, doador_id, receptor_id, alimento, kg, codigo, entrega,
 -- Instantes relativos à criação do banco: em um banco antigo a reserva já terá sido liberada.
 WITH reserva AS (
   INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade, status, reservado_por, reservado_em,
-                     codigo, janela_inicio, janela_fim, criado_em)
+                     codigo, janela_inicio, janela_fim, retirada_ate, criado_em)
   VALUES (3, 'Bolos e roscas', 'Panificados', 6, (now() AT TIME ZONE 'America/Campo_Grande')::date + 1,
           'reservado', 4, now() - interval '90 minutes', '482915',
-          now() - interval '90 minutes', now() + interval '25 minutes', now() - interval '3 hours')
+          now() - interval '90 minutes', now() + interval '25 minutes',
+          (((now() AT TIME ZONE 'America/Campo_Grande')::date + 2)::timestamp AT TIME ZONE 'America/Campo_Grande'),
+          now() - interval '3 hours')
   RETURNING id
 ), ev AS (
   INSERT INTO eventos_lote (lote_id, tipo, usuario_id, criado_em)

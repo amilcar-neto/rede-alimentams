@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import WebSocket from 'ws';
-import { call, login, dia, hoje, janela, checklist } from './helpers.mjs';
+import { call, login, dia, hoje, janela, checklist, retiradaAte } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 const require = createRequire(import.meta.url);
@@ -51,7 +51,7 @@ const esperarEvento = (c, tipo, lote, ms = 2000) => aguardar(() => recebido(c, t
 const semEvento = (c, lote) => assert.deepEqual(c.quadros.filter((q) => q.lote_id === lote), []);
 
 const publicar = async (token = comper, validade = dia(3)) => {
-  const r = await call('POST', '/lotes', { alimento: 'Lote L05', categoria: 'Panificados', quantidade_kg: 4, validade }, token);
+  const r = await call('POST', '/lotes', { alimento: 'Lote L05', categoria: 'Panificados', quantidade_kg: 4, validade, retirada_ate: retiradaAte(validade) }, token);
   assert.equal(r.s, 201, JSON.stringify(r));
   return r.d.id;
 };

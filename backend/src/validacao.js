@@ -95,6 +95,24 @@ function dataHora(valor, campo) {
   return entrada;
 }
 
+// Foto do lote (L03): base64 puro de JPEG ou PNG, até 400 KB. O tipo vem da assinatura dos bytes,
+// nunca do que o cliente declara. Ausente ou null = lote sem foto.
+const FOTO_MAX_BYTES = 400 * 1024;
+const FOTO_MAX_BASE64 = Math.ceil(FOTO_MAX_BYTES / 3) * 4;
+const ASSINATURA_PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+function foto(valor) {
+  if (valor === undefined || valor === null) return null;
+  if (typeof valor !== 'string' || !valor) falhar('A foto deve ser uma imagem JPEG ou PNG em base64.');
+  if (valor.length > FOTO_MAX_BASE64) falhar('A foto deve ter no máximo 400 KB.');
+  if (valor.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(valor))
+    falhar('Foto inválida: envie a imagem JPEG ou PNG em base64, sem prefixo.');
+  const dados = Buffer.from(valor, 'base64');
+  if (dados.length > FOTO_MAX_BYTES) falhar('A foto deve ter no máximo 400 KB.');
+  if (dados.length >= 3 && dados[0] === 0xff && dados[1] === 0xd8 && dados[2] === 0xff) return { dados, tipo: 'image/jpeg' };
+  if (dados.length > ASSINATURA_PNG.length && dados.subarray(0, 8).equals(ASSINATURA_PNG)) return { dados, tipo: 'image/png' };
+  return falhar('O arquivo enviado não é uma imagem JPEG ou PNG válida.');
+}
+
 function id(valor) {
   if (typeof valor !== 'string' || !/^[1-9]\d{0,9}$/.test(valor) || Number(valor) > 2147483647)
     falhar('ID inválido: informe um inteiro positivo.');
@@ -107,4 +125,4 @@ function codigo(valor) {
   return normalizado;
 }
 
-module.exports = { ErroValidacao, corpo, texto, opcao, email, senha, cnpj, CATEGORIAS, quantidade, data, dataHora, id, codigo };
+module.exports = { ErroValidacao, corpo, texto, opcao, email, senha, cnpj, CATEGORIAS, quantidade, data, dataHora, foto, FOTO_MAX_BYTES, id, codigo };

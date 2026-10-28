@@ -27,6 +27,13 @@ export function janela(validade = dia(2), duracao = 60) {
   return { janela_inicio: local(), janela_fim: fim > limite ? limite : fim };
 }
 
+// Horário limite de retirada (L03) no fim do dia da validade: o máximo aceito, sempre no futuro.
+// Tolera validade inválida (usada em testes de 400) caindo no padrão dia(2).
+export function retiradaAte(validade = dia(2)) {
+  const t = Date.parse(String(validade) + 'T12:00:00Z');
+  return new Date((Number.isNaN(t) ? Date.parse(dia(2) + 'T12:00:00Z') : t) + 86400e3).toISOString().slice(0, 10) + 'T00:00';
+}
+
 export async function call(method, url, body, token) {
   const response = await fetch('http://127.0.0.1:3100' + url, {
     method,

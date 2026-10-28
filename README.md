@@ -27,14 +27,15 @@ Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXE
 
 ## Funcionalidades
 - Cadastro e login (JWT + bcrypt) de doadores e entidades receptoras, com CNPJ validado por dígito verificador.
-- Doador publica lotes; a entidade receptora vê os lotes num raio de 10 km (PostGIS), ordenados por validade e distância.
-- Reserva com janela de retirada (até 2 h, dentro do dia da validade) e código de 6 dígitos; só a primeira entidade consegue reservar.
-- Ciclo de vida: lote vencido vira `expirado`; reserva não retirada após a janela (mais tolerância) volta a `disponivel`.
+- Doador publica lotes com horário limite de retirada (obrigatório, até o fim do dia da validade) e foto opcional (reduzida no navegador, JPEG/PNG de até 400 KB); a entidade receptora vê os lotes num raio de 10 km (PostGIS), ordenados por validade e distância, com miniatura e "retirar até dd/mm hh:mm".
+- Reserva com janela de retirada (até 2 h, dentro do horário limite do lote) e código de 6 dígitos; só a primeira entidade consegue reservar.
+- Ciclo de vida: lote vencido, ou ainda disponível depois do horário limite de retirada, vira `expirado`; reserva não retirada após a janela (mais tolerância) volta a `disponivel`.
 - QR Code de retirada (link para o app com lote e código preenchidos) e confirmação pelo doador com checklist sanitário.
 - Comprovante digital com hash SHA-256 e página pública de verificação (`/verificar/:hash`). Não é certificado ICP-Brasil.
 - Notificações em tempo real por WebSocket (`/ws`) e central de notificações; sem WebSocket a consulta HTTP continua valendo.
 - Indicadores globais (kg, refeições, CO₂, água) e histórico de doações.
-- Fora desta versão: fotos de lote (L03), relatórios/admin (L06) e e-mail.
+- A foto só é entregue ao doador dono e a quem pode ver o lote (`GET /lotes/:id/foto`, com token).
+- Fora desta versão: relatórios/admin (L06) e e-mail.
 
 ## Como rodar
 
@@ -79,7 +80,7 @@ Senha de todas as contas: `123456`. CNPJs são sintéticos.
 | Receptora fora do raio de 10 km | longe@demo.com |
 
 O seed cria:
-- 4 lotes disponíveis (validade hoje, amanhã, +2 e +4 dias);
+- 4 lotes disponíveis (validade hoje, amanhã, +2 e +4 dias), sem foto e com horário limite no fim do dia da validade;
 - histórico de 30 dias: 16 doações entregues, com eventos e comprovantes de hash verificável, de modo que os indicadores já abrem com números;
 - 1 reserva perto de expirar (Padaria Pão Nosso → Casa de Apoio Esperança, código `482915`, janela termina ~25 min após a criação do banco). Depois da janela mais a tolerância, o lote volta a ficar disponível na primeira consulta.
 
@@ -100,7 +101,8 @@ Os instantes são relativos ao momento da criação do banco; para reiniciar a d
 | POST | /auth/register, /auth/login | público |
 | GET | /verificar/:hash | público (dados mínimos) |
 | GET | /lotes | doador / receptora |
-| POST | /lotes | doador |
+| POST | /lotes | doador (`retirada_ate` obrigatório; `foto` base64 opcional) |
+| GET | /lotes/:id/foto | doador dono ou receptora que pode ver o lote |
 | PUT | /lotes/:id/reservar | receptora |
 | GET | /lotes/:id/qrcode | receptora que reservou |
 | PUT | /lotes/:id/confirmar-retirada | doador |
