@@ -90,3 +90,13 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Extensão conectada; servidor local (`node backend/src/server.js`, porta 3000, banco descartável) iniciado e encerrado. Roteiro visual executado: máscara e erro de CNPJ (`...-82`), aceite de `11.222.333/0001-81`, Publicar com amanhã (29/10) e quantidade decimal 2.5, login demo Comper. Detalhes no [checklist L01](progresso/L01.md).
 - Corrigido em `backend/public/index.html` o `sair()` (limpa erro/senha do cadastro e volta ao login). `npm.cmd test` em backend/: 65 pass / 0 fail, código 0, 7762,5751 ms.
 - Não testado visualmente: colagem do CNPJ, perfil ONG. Revisão separada pendente (controlador). Sem prints em disco.
+
+## 28/10/2026 — L07 — implementação claude
+
+- Papel: executor (Claude), sem subagentes. Branch `lote/L07`, Git limpo no início. Sem acesso ao VPS, publicação ou mensagens; sem commits, staging ou alterações em .git/.agentes/controlador/plano.
+- Entregue: `GET /saude` (`{ok,banco}`, 503 sem detalhes se o banco falhar), `trust proxy` 1, cabeçalhos X-Content-Type-Options/Referrer-Policy/X-Frame-Options (sem CSP), `docker-compose.prod.yml` (db/app/caddy, só Caddy publica 80/443, variáveis do .env, volumes, restart), `deploy/Caddyfile`, `.env.example` com placeholders, `docs/DEPLOY.md` (inclui "O que isto tem de Redes", backup `pg_dump` e atualização sem reaplicar schema) e `backend/test/08-saude.test.mjs` (7 testes).
+- Testes: `npm.cmd test` em backend/ (banco `alimentams_test`): código 0, **74 pass / 0 fail / 0 todo / 0 skipped / 0 cancelled**, ≈15885 ms. Uma falha inicial no meu próprio teste do DEPLOY.md (caixa de letra) foi corrigida antes. `docker compose config` local validou o compose; `caddy validate` não executado.
+- Varredura de segredos feita com Grep (rg ausente): só placeholders e credenciais locais já existentes de dev/teste; nenhum .env versionado. Detalhes no [checklist L07](progresso/L07.md).
+- Conferência visual: não aplicável (sem mudança de interface); não realizada.
+- Limitações: nada testado no VPS (DNS, TLS, firewall, WebSocket); contas demo do init.sql com senha conhecida marcadas [GRUPO]; revisão independente pendente.
+- Próximo passo: controlador repete testes e chama revisão por risco (portas/segredos); grupo faz o deploy pelo DEPLOY.md.

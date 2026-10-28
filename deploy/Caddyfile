@@ -1,0 +1,6 @@
+# Caddy: HTTPS automático (certificado Let's Encrypt) para o domínio do .env.
+# O WebSocket (Upgrade) passa pelo reverse_proxy sem configuração extra.
+{$DOMINIO} {
+	encode zstd gzip
+	reverse_proxy app:3000
+}
