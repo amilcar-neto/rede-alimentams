@@ -68,3 +68,25 @@ test('L08 seed: reserva perto de expirar existe, é da Esperança e a janela ter
   }
   assert.equal((await db.query(`SELECT count(*)::int AS n FROM eventos_lote WHERE lote_id = 21 AND tipo = 'publicado'`)).rows[0].n, 1);
 });
+
+test('L08 complemento: miniatura PNG do seed acessível às partes e lote sem imagem preservado', async () => {
+  const comper = await login('comper@demo.com');
+  const esperanca = await login('esperanca@demo.com');
+  const longe = await login('longe@demo.com');
+  const seed = (await db.query('SELECT foto, foto_tipo FROM lotes WHERE id = $1', [3])).rows[0];
+  assert.equal(seed.foto_tipo, 'image/png');
+  assert.deepEqual(seed.foto.subarray(0, 8), Buffer.from('89504e470d0a1a0a', 'hex'));
+  assert.equal(seed.foto.readUInt32BE(16), 160);
+  assert.equal(seed.foto.readUInt32BE(20), 96);
+  for (const token of [comper, esperanca]) {
+    const r = await fetch('http://127.0.0.1:3100/lotes/3/foto', { headers: { Authorization: 'Bearer ' + token } });
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /image\/png/);
+    assert.deepEqual(Buffer.from(await r.arrayBuffer()), seed.foto);
+  }
+  assert.equal((await call('GET', '/lotes/3/foto', undefined, longe)).s, 404);
+  assert.equal((await call('GET', '/lotes/1/foto', undefined, comper)).s, 404);
+  const lista = (await call('GET', '/lotes', undefined, comper)).d;
+  assert.equal(lista.find((l) => l.id === 3).tem_foto, true);
+  assert.equal(lista.find((l) => l.id === 4).tem_foto, false);
+});
