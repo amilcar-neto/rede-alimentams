@@ -159,3 +159,71 @@ Roteiro exato preservado para humano com navegador autorizado e apenas banco des
 ### Próximo passo vigente
 
 Corrigir **M2 em `backend/src/server.js:380`**, renderizando antes de selecionar HTML; acrescentar regressão HTTP ao teste de integridade de `backend/test/05-comprovante-qr.test.mjs:285`–`287`. A reprodução desta revisão devolveu **500 text/html com corpo JSON**; o esperado é **500 application/json**. Executar `npm test` em `backend/` e devolver o diff para revalidação antes de integrar. M1 está encerrado; preservar sua regressão e o roteiro visual humano pendente. O revisor não alterou o checklist/LOG originais por restrição expressa desta fase.
+
+---
+
+## Revalidação independente — 28/10/2026 — HEAD 82a950c
+
+**Resultado vigente: ready — aprovado para o escopo L04, sem correções necessárias identificadas. `block_reason: none`.** M1 e M2 estão resolvidos. As conclusões anteriores de `continue` permanecem acima como histórico, substituídas por esta revalidação. A conferência visual humana continua pendente e não impede este aceite, conforme exceção expressa do usuário.
+
+### Escopo e método
+
+- Ferramenta: codex; papel: revisor único, sem subagentes ou outros executores. Modelo efetivo/esforço: não informados pelo cliente.
+- Branch `lote/L04`; HEAD revisado: `82a950c3c8da299e38a8420595c6ce1ac6f9d0a2`.
+- Base `main`: `f2aa942795e83b6d2d2a8304c39efb2308629a8e`. Revisado o diff completo `main..HEAD` e, separadamente, a correção M2 desde `2db1cd1`. `baseline` (`cf88651de874b8c1b0c0baaebf87f02f9e9e29c0`) permanece reservado ao diff acumulado `baseline..HEAD` na revisão FINAL.
+- Lidos AGENTS.md, seção L04 e regras de revisão do PLANO_AGENTES.md, checklist L04, LOG.md, relatório anterior e referência local ANALISE_CONFORMIDADE.md. Inspecionados implementação, schema, interface, mudanças nos testes existentes, novos testes, dependência direta e contexto de autenticação, validação, ciclo de vida e runner/reset.
+- Árvore limpa no início. Único arquivo escrito nesta sessão: `docs/agentes/REVISAO_L04.md`. Não foram alterados código, testes, checklist, LOG, plano, instruções, configurações ou runtime. Sem commits, staging, mudança de branch, integração, VPS, publicação, mensagens externas ou dados reais.
+
+### Achados anteriores encerrados
+
+**M1 — Resolvido, regressões preservadas e aprovadas.** `backend/src/comprovante.js:29`–`70` valida a autoridade Host e o hostname, limita o link completo após normalização e diferencia entrada inválida de configuração inválida. `backend/src/server.js:359` aguarda o encoder antes de selecionar PNG. Os testes em `backend/test/05-comprovante-qr.test.mjs:85` e `:125` exercitam limites e HTTP real com Express/JWT: Host excessivo/malformado recebe 400 JSON, encoder/configuração com falha recebem 500 JSON e o caso válido conserva os bytes do PNG esperado. A leitura do banco é simulada nessa regressão; autorização e persistência reais são verificadas pelos demais testes de integração.
+
+**M2 — Resolvido e revalidado nesta sessão.** `backend/src/server.js:380` calcula `paginaVerificacao` antes de definir HTML em `:381`. A exceção de integridade chega ao wrapper `:70`–`74` sem Content-Type previamente selecionado. A regressão acrescentada em `backend/test/05-comprovante-qr.test.mjs:290` usa Express, rota e renderizador reais, com somente a leitura do banco simulada. Nesta execução, passaram tanto o caso válido (200 HTML e no-store) como o snapshot inconsistente (500 application/json, corpo genérico exato e log interno de integridade). A falha interna não foi convertida em validação nem ocultada como 404. A reprodução histórica antes da correção e o resultado vermelho registrados pelo executor foram preservados; nesta revalidação foi executada a versão corrigida.
+
+### Aceite e riscos inspecionados
+
+| Critério | Evidência de código e testes desta revisão | Resultado |
+|---|---|---|
+| Checklist sanitário obrigatório | `server.js:293`–`295`, `comprovante.js:12`–`16` e CHECK `db/init.sql:56`; casos ausentes, incompletos, falsos, tipos e campos extras retornam 400 sem entrega/doação | Atendido |
+| Snapshot e SHA-256 em todas as confirmações | `server.js:319`–`333`, `comprovante.js:21`–`27`, NOT NULL/UNIQUE do schema; partes/CNPJs, alimento, quantidade decimal, instante, código e checklist entram no snapshot; testes recalculam hashes e verificam estabilidade após alteração cadastral | Atendido |
+| Atomicidade e confirmação concorrente | UPDATE condicional, INSERT de doação/evento, COMMIT e ROLLBACK no mesmo cliente em `server.js:299`–`345`; validade/tolerância revalidadas no UPDATE; oito confirmações simultâneas produzem uma doação e um evento | Atendido |
+| Comprovante restrito às partes | `server.js:363`–`371`: autenticação e comparação com IDs persistidos; testes 200 para ambas as partes, 403 para terceiros, 401 sem token, 400 para ID inválido e 404 inexistente | Atendido |
+| Verificação pública mínima e integridade | `server.js:375`–`381`, `comprovante.js:100`–`110`; consulta parametrizada por hash, recomputação da integridade, resumo sem nomes/CNPJs/código/alimento/instante; 200 válido, 404 alterado e regressão M2 | Atendido |
+| Imutabilidade | `db/init.sql:61`–`68`: trigger de instrução BEFORE UPDATE OR DELETE; testes executam ambos diretamente no PostgreSQL, recebem SQLSTATE 55000 e verificam registro preservado | Atendido |
+| QR restrito, payload e código visível | `server.js:350`–`360`: perfil receptora, dona da reserva e estado; testes 200 image/png com payload esperado, 401/403 e indisponibilidade após entrega/liberação; front conserva código numérico | Atendido |
+| Link de retirada, HTML e comprovante imprimível | `index.html:345`–`359`, `:389`–`395`, `:432`–`446`: fragmento/login, código com zeros, checklist não marcado automaticamente, requisição com Bearer sem JWT em URL; renderizador escapa conteúdo e usa Campo Grande, CSS print e QR público | Inspeção e testes atendidos; visual pendente |
+
+Não foram encontrados novos achados críticos, altos ou médios que exijam correção neste escopo. A aprovação considera as condições de autorização, transação, schema e renderização acima, além do resultado dos testes.
+
+### Execução e qualidade dos testes
+
+- Antes da suíte, lidas as guardas de `backend/test/reset-db.mjs` e o runner: allowlist local `alimentams_test`/sufixos, recusa antes de conectar fora desse escopo, porta exclusiva e limpeza dos processos filhos. Nenhum arquivo de credenciais foi lido.
+- `npm.cmd test` em `backend/`: **código 0; 102 testes / 102 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo; 17663,9688 ms**. Saída confirmou `Banco de teste recriado e db/init.sql carregado: alimentams_test`. Runner concluído e seus processos encerrados.
+- `git diff --check main..HEAD`: **código 0**, sem erros.
+- As mudanças nos testes anteriores acrescentam o checklist obrigatório e o mapeamento do módulo no harness, preservando as assertivas. A única dependência direta acrescentada é `qrcode`, permitida pelo plano.
+- Há integração real com PostgreSQL/API para autorização, checklist, concorrência, snapshot e trigger. As regressões M1/M2 usam HTTP/Express reais e dados sintéticos simulados para os caminhos de falha. Não foram desativados triggers nem adulterados comprovantes reais.
+- Limites da cobertura: comparação de PNG com o encoder prova o payload esperado, não leitura por câmera; DOM mínimo não comprova o fluxo completo no navegador, abertura de Blob, layout ou impressão. Rollback por falha induzida no INSERT ainda não tem teste dedicado; o caminho transacional foi inspecionado e não foi encontrado defeito. Isso permanece uma oportunidade de cobertura, sem correção obrigatória identificada.
+- Bancos legados exigem atualização controlada do schema e estratégia para registros antigos, como já documentado pelo executor. Nenhuma migração foi executada; o aceite aqui corresponde ao schema fonte e ao banco descartável recriado.
+
+### Checklist desta revisão e conferência visual humana PENDENTE
+
+- [x] Revisar independentemente diff completo do lote e contexto.
+- [x] Revalidar M1 e M2 sem alterar código ou testes.
+- [x] Executar npm test em backend/ e avaliar qualidade/cobertura.
+- [x] Tentar navegador e preservar evidências válidas e negativas anteriores.
+- [ ] **Conferência visual humana PENDENTE.** Tentativa desta sessão, com skill computer-use e `cua.getState()`: `browsers: []`, erro **`Browsers: Error: The browser access host is unavailable`**. A negativa histórica **`Computer Use was not approved to use Microsoft Edge`** continua registrada e não foi repetida, contornada ou reclassificada como indisponibilidade.
+
+Não houve tela do app, print, câmera, impressão ou revisão humana nesta sessão. O executor disponível não expõe `run_in_background`; não foi iniciado app manual em 3000 nem improvisado outro modo de lançamento. Foram executados somente os servidores controlados pela suíte, encerrados pelo runner. A exceção expressa do usuário permite este ready com a pendência visual; `block_reason: none` indica ausência de impedimento atual para concluir esta revisão, sem apagar o diagnóstico histórico de permissão negada.
+
+Roteiro exato preservado para humano com navegador autorizado, somente banco descartável:
+
+1. Iniciar somente `node backend/src/server.js` em segundo plano e abrir `http://localhost:3000`.
+2. Entrar como demo Comper; publicar lote sintético de amanhã com 2,50 kg. Entrar como Casa Esperança; reservar janela de até 2 h. Conferir QR e código de seis dígitos legíveis, inclusive em largura móvel.
+3. Anotar `http://localhost:3000/#retirada/<id>/<codigo>`, sair e abrir o link. Conferir pedido de login e fragmento preservado. Entrar como Comper: código preenchido, três itens desmarcados. Confirmar sem todos deve falhar; marcar os três e confirmar deve registrar a doação e oferecer o comprovante.
+4. Abrir comprovante pelo sucesso e pela aba Doações; conferir nomes/CNPJs sintéticos, alimento, 2,50 kg, data/hora Campo Grande, código, checklist, hash e QR. Usar Ctrl+P, conferir prévia sem cortes e cancelar. Repetir acesso como receptora.
+5. Abrir o link do QR público sem login: válido, quantidade/hash, sem cadastro/código. Alterar um caractere do hash: 404. Como Sabor MS/Amambai, chamadas autenticadas a comprovante/QR alheios devem retornar 403.
+6. Abrir link de retirada como receptora e com reserva inexistente: mensagem adequada, sem confirmação automática. Encerrar o servidor ao terminar.
+
+### Próximo passo vigente
+
+L04 aprovado nesta revisão. O controlador pode prosseguir com seu fluxo de integração; o revisor não integrou nem publicou. Humano autorizado deve executar o roteiro visual pendente. Preservar as regressões M1/M2 e submeter mudanças posteriores à revisão proporcional; a revisão FINAL deverá usar `baseline..HEAD` e conferir a integração acumulada.
