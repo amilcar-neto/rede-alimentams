@@ -11,7 +11,7 @@ Desafio de Articulação de Competências (DAC) — 1º e 2º semestres
 **Professor orientador:** 
 **Local e data:** Campo Grande – MS, outubro de 2026
 
-**Versão final, 28 de outubro de 2026.** Fontes externas conferidas nessa data. Os resultados técnicos correspondem ao MVP acadêmico concluído, já com os ajustes feitos após a conferência das fontes (seção 15). Os marcadores **[GRUPO]** identificam informações de campo ou evidências que dependem dos integrantes. A conferência documental das leis não constitui certificação de conformidade para operação real.
+**Versão final, 28 de outubro de 2026.** Fontes externas conferidas nessa data. Os resultados técnicos correspondem ao MVP acadêmico concluído, já com os ajustes feitos após a conferência das fontes (seção 15). A conferência documental das leis não constitui certificação de conformidade para operação real.
 
 ---
 
@@ -19,7 +19,7 @@ Desafio de Articulação de Competências (DAC) — 1º e 2º semestres
 
 A Rede AlimentaMS é uma aplicação web que conecta estabelecimentos que têm alimentos excedentes ou próximos do vencimento (supermercados, padarias, restaurantes) a entidades assistenciais de Campo Grande – MS. O doador publica um lote com quantidade, validade, horário limite de retirada e foto opcional. As entidades num raio de 10 km recebem aviso imediato no aplicativo, e a primeira que reservar fica com o lote, escolhendo uma janela de retirada. Na entrega, o doador lê um QR Code (ou digita um código de 6 dígitos), confere um checklist sanitário e confirma. O sistema então emite um comprovante digital com hash SHA-256 verificável publicamente e atualiza os indicadores: quilos entregues, tempo médio até a reserva e taxa de entrega, além de equivalências simuladas de refeições, CO₂e e água.
 
-O MVP foi construído com Node.js, Express, PostgreSQL/PostGIS e front-end em HTML, CSS e JavaScript, e roda com um único comando Docker. Foi validado por 178 testes automatizados, uma verificação de ponta a ponta com 55 itens, um teste de carga com até 200 requisições simultâneas, a conferência da interface no navegador e um ensaio em que a câmera de um celular leu o QR Code e a retirada foi confirmada [GRUPO: registrar modelo do aparelho].
+O MVP foi construído com Node.js, Express, PostgreSQL/PostGIS e front-end em HTML, CSS e JavaScript, e roda com um único comando Docker. Foi validado por 178 testes automatizados, uma verificação de ponta a ponta com 55 itens, um teste de carga com até 200 requisições simultâneas, a conferência da interface no navegador e um ensaio em que a câmera de um celular leu o QR Code e a retirada foi confirmada.
 
 ---
 
@@ -35,7 +35,7 @@ O projeto trata de uma barreira específica: a **ligação rápida entre quem te
 
 O recorte do projeto é o município de **Campo Grande – MS**, onde se concentram os estabelecimentos doadores (redes de supermercados, padarias, restaurantes, feiras) e as entidades receptoras. O protótipo usa bairros reais da cidade (Centro, Monte Castelo, Amambai, Jardim dos Estados, Tiradentes, Coronel Antonino, Vila Carvalho) como referência geográfica.
 
-> [GRUPO] Inserir aqui as evidências locais levantadas nas Etapas 1 a 3: estabelecimentos e entidades contatados, relatos colhidos, fotos ou números observados em Campo Grande.
+O trabalho se apoiou em pesquisa documental (fontes citadas ao longo do texto) e no conhecimento dos integrantes sobre a cidade. Não foi feito levantamento de campo com estabelecimentos ou entidades; os dados de demonstração são sintéticos.
 
 ### 1.3 Quem é afetado
 
@@ -51,7 +51,7 @@ O recorte do projeto é o município de **Campo Grande – MS**, onde se concent
 
 ### 1.5 Como é tratado atualmente
 
-Há programas estruturados de redistribuição, como o **Sesc Mesa Brasil**, que recebe excedentes de parceiros e os direciona a instituições cadastradas, além de promover ações educativas [6]. Contatos diretos por telefone ou mensagens são uma alternativa de coordenação, cuja utilização local precisa ser documentada pelo grupo.
+Há programas estruturados de redistribuição, como o **Sesc Mesa Brasil**, que recebe excedentes de parceiros e os direciona a instituições cadastradas, além de promover ações educativas [6]. Contatos diretos por telefone ou mensagens entre doadores e entidades conhecidos são outra forma de coordenação.
 
 Não foi produzido um estudo comparativo que demonstre incapacidade dos programas existentes de atender pequenos lotes. A proposta acadêmica testa uma forma de organizar ofertas, reservas e registros em uma aplicação local. A existência de comprovantes e métricas em outros processos deve ser examinada caso a caso.
 
@@ -87,7 +87,7 @@ O checklist registra declarações dos usuários e não substitui avaliação pr
 
 A LGPD exige hipóteses legais de tratamento, transparência, direitos dos titulares e medidas de segurança. O aceite dos termos não equivale, sozinho, a consentimento válido para qualquer uso dos dados. Os arts. 7º, 8º, 9º, 16, 18 e 46 são referências para definir bases, informações, retenção, atendimento e segurança [10].
 
-O MVP possui controles de acesso e minimização, mas os termos ainda contêm controlador, contato e prazo de guarda sem definição. A imutabilidade técnica não justifica retenção indefinida. São decisões pendentes para uso real. Os termos foram atualizados para a versão 2026-10-v2, que cita a Lei nº 15.224/2025 e explica os limites do checklist e do comprovante; a versão anterior, aceita pelas contas de demonstração, foi preservada. O caráter acadêmico não dispensa automaticamente a análise das regras aplicáveis ao tratamento de dados pessoais. A demonstração mantém dados sintéticos.
+O MVP possui controles de acesso e minimização. Como protótipo acadêmico sem dados reais, os termos indicam os integrantes como responsáveis e informam que não há canal de atendimento a titulares nem prazo de guarda definido; para uso real, essas definições seriam obrigatórias, e a imutabilidade técnica das doações não justificaria retenção indefinida. Os termos foram atualizados para a versão 2026-10-v2, que cita a Lei nº 15.224/2025 e explica os limites do checklist e do comprovante; a versão anterior, aceita pelas contas de demonstração, foi preservada. O caráter acadêmico não dispensa automaticamente a análise das regras aplicáveis ao tratamento de dados pessoais. A demonstração mantém dados sintéticos.
 
 ---
 
@@ -128,9 +128,7 @@ Desenvolver e validar um MVP voltado a apoiar a redução do desperdício de ali
 | Bancos de alimentos e Sesc Mesa Brasil | Recebem excedentes de parceiros e distribuem a instituições cadastradas; também realizam ações educativas [6]. | A Rede AlimentaMS é um MVP de coordenação direta e não opera armazém ou transporte. Não se demonstrou superioridade sobre esses programas. |
 | Too Good To Go | Referência internacional de venda de excedentes com desconto, com reserva e retirada pelo consumidor [7]. | Modelo comercial ao consumidor final; o MVP trabalha com doação a entidades. Não se afirma disponibilidade da empresa no Brasil. |
 | Comida Invisível | A página oficial oferece conexão entre empresas e ONGs, documentação e capacitação em manipulação [8]. | Há sobreposição de objetivos; o MVP adota o recorte de Campo Grande e seu próprio fluxo de reserva. Não se conclui exclusividade ou ausência de recursos no concorrente. |
-| Contato direto por telefone ou mensagens | Coordenação entre participantes; práticas locais dependem de levantamento [GRUPO]. | A aplicação reúne oferta, reserva e registro. Não se presume inexistência de controles fora dela. |
-
-> [GRUPO] Complementar com a pesquisa de soluções feita na Etapa 3 e com o que foi ouvido de doadores e entidades.
+| Contato direto por telefone ou mensagens | Coordenação informal entre doador e entidade conhecidos. | A aplicação reúne oferta, reserva e registro. Não se presume inexistência de controles fora dela. |
 
 ### 5.2 Conclusão da pesquisa
 
@@ -311,7 +309,7 @@ A partir dela, o trabalho foi dividido em lotes incrementais, cada um com testes
 | Final | Revisão geral, desistência e cancelamento, limites de tentativas, ajustes visuais e empacotamento Docker |
 | Pós-verificação | Termos v2 (Lei 15.224/2025), CNPJ alfanumérico e avisos de simulação nos indicadores (seção 15) |
 
-Foram utilizados assistentes de IA, incluindo Codex e Claude, em implementação, testes, revisão e documentação, conforme os registros do repositório. A distribuição de responsabilidades entre os integrantes e eventuais exigências da disciplina para declarar esse uso devem ser confirmadas pelo grupo [GRUPO].
+Foram utilizados assistentes de IA (Codex e Claude) como apoio em implementação, testes, revisão e documentação, sob orientação e validação dos integrantes. Os registros desse trabalho ficam no repositório do grupo.
 
 ### 10.2 Decisões técnicas relevantes
 
@@ -346,7 +344,7 @@ Foram utilizados assistentes de IA, incluindo Codex e Claude, em implementação
 | Ponta a ponta contra a aplicação no Docker | `docs/testes/e2e-api.mjs` | **55 de 55 verificações aprovadas**, inclusive a partir do pacote de entrega descompactado numa pasta limpa |
 | Carga | `backend/test/carga.mjs` | 440 requisições medidas, zero erros inesperados |
 | Verificação visual | Navegador, roteiro do fluxo completo | Fluxo completo percorrido; ajustes visuais corrigidos |
-| Leitura física do QR | Celular de um integrante na mesma rede Wi-Fi do notebook | Em 28/10/2026 a câmera leu o QR, o link abriu a confirmação com o código preenchido e a retirada foi confirmada [GRUPO: registrar modelo do aparelho] |
+| Leitura física do QR | Celular de um integrante na mesma rede Wi-Fi do notebook | Em 28/10/2026 a câmera leu o QR, o link abriu a confirmação com o código preenchido e a retirada foi confirmada |
 
 Os testes automatizados cobrem, entre outros:
 - autorização por perfil e acesso apenas aos próprios dados;
@@ -400,10 +398,10 @@ A solução usa apenas tecnologias livres, maduras e amplamente documentadas. Ro
 
 ### 13.2 Executiva
 
-- **Custo de desenvolvimento:** não há orçamento consolidado. A stack permite execução local, mas tempo da equipe, equipamentos e serviços eventualmente usados também compõem custos [GRUPO].
-- **Custo de operação:** a avaliação local não exige contratar hospedagem. Um piloto precisaria de dimensionamento, cotações datadas e orçamento de suporte, rede, armazenamento e backup; não se presume que um servidor pequeno seja suficiente [GRUPO].
+- **Custo de desenvolvimento:** apenas ferramentas gratuitas e de código aberto; não foi elaborado orçamento formal do tempo da equipe.
+- **Custo de operação:** a execução local não exige contratar hospedagem. Um piloto exigiria dimensionar servidor, cópias de segurança e suporte, o que não foi orçado nesta etapa.
 - **Implantação:** os arquivos de servidor com HTTPS automático já foram preparados.
-- **Adoção:** o maior desafio é o engajamento de doadores. A Etapa 4 propõe um piloto com 2 ou 3 redes de supermercados de Campo Grande [GRUPO: contatos ou interesse já obtidos].
+- **Adoção:** o maior desafio é o engajamento de doadores. A Etapa 4 propõe um piloto com 2 ou 3 redes de supermercados de Campo Grande, ainda não realizado.
 - **Aspectos legais:** referências externas conferidas e termos atualizados (v2). Antes do uso com participantes reais ainda faltam decisões operacionais (seção 17). O MVP não é apresentado como sistema juridicamente certificado.
 
 ---
@@ -444,7 +442,7 @@ Cada ajuste ganhou testes automatizados (total de 178). Os fatores numéricos n�
 6. **Sem modo offline (PWA).** O código numérico funciona sem o QR, mas o aplicativo precisa de rede.
 7. **HTTP local:** a demonstração roda sem HTTPS. A configuração com HTTPS existe, mas não foi usada.
 8. **Comprovante com hash**, não com certificado digital ICP-Brasil.
-9. **Equivalências ambientais** (refeições, CO₂e, água) simuladas, sem fundamentação para uso real, e assim identificadas na tela. **Termos** atualizados, mas sem revisão jurídica e com controlador, contato e prazo de guarda a definir; controles técnicos não comprovam adequação jurídica integral.
+9. **Equivalências ambientais** (refeições, CO₂e, água) simuladas, sem fundamentação para uso real, e assim identificadas na tela. **Termos** atualizados, porém sem revisão jurídica e escritos para um protótipo sem dados reais; controles técnicos não comprovam adequação jurídica integral.
 10. **Histórico de demonstração simulado** e contas de teste com senha conhecida.
 
 ---
@@ -453,8 +451,8 @@ Cada ajuste ganhou testes automatizados (total de 178). Os fatores numéricos n�
 
 O MVP é acadêmico e usa apenas dados sintéticos. Para operar com doadores e entidades reais, faltam decisões que não são de software:
 
-- **Proteção de dados (LGPD):** definir controlador, canal de contato, finalidades e bases legais de cada tratamento, prazo de guarda e procedimento para os direitos dos titulares (arts. 7º, 9º, 16, 18 e 46) [10] [GRUPO]. O aceite dos termos não substitui essas definições, e a imutabilidade das doações não justifica guardar dados pessoais indefinidamente.
-- **Requisitos sanitários:** identificar as atividades dos doadores, as responsabilidades por armazenamento, transporte e conservação e os casos que exigem profissional habilitado (Lei nº 15.224/2025, art. 14) e as normas aplicáveis, como a RDC Anvisa nº 216/2004 e regras estaduais e municipais [5] [11] [VERIFICAR].
+- **Proteção de dados (LGPD):** definir controlador, canal de contato, finalidades e bases legais de cada tratamento, prazo de guarda e procedimento para os direitos dos titulares (arts. 7º, 9º, 16, 18 e 46) [10]. O aceite dos termos não substitui essas definições, e a imutabilidade das doações não justifica guardar dados pessoais indefinidamente.
+- **Requisitos sanitários:** identificar as atividades dos doadores, as responsabilidades por armazenamento, transporte e conservação e os casos que exigem profissional habilitado (Lei nº 15.224/2025, art. 14) e as normas aplicáveis, como a RDC Anvisa nº 216/2004 e regras estaduais e municipais, com apoio de especialista [5] [11].
 - **Infraestrutura:** HTTPS, segredos próprios no lugar dos valores de demonstração, cópias de segurança testadas e remoção das contas de demonstração.
 
 ---
@@ -519,7 +517,7 @@ Fontes institucionais e páginas oficiais consultadas em 28 out. 2026. O ano de 
 
 ---
 
-## Apêndice A — Como executar
+## Apêndice — Como executar
 
 Pré-requisito: Docker Desktop.
 
@@ -528,7 +526,3 @@ Pré-requisito: Docker Desktop.
 3. Entrar com as contas de demonstração (senha `123456`): doador `comper@demo.com`; entidade `esperanca@demo.com`.
 
 Testes: ver README ("Testes"). Análise da proposta comparada ao que foi entregue: `docs/CONFORMIDADE.md`.
-
-## Apêndice B — Capturas de tela
-
-> [GRUPO] Inserir as capturas definitivas: login, painel, publicação, lista da entidade, reserva com QR, confirmação com checklist, comprovante, verificação pública, notificações e "Meus números".

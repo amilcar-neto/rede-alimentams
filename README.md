@@ -138,7 +138,7 @@ Estes arquivos existem só no repositório do grupo; o zip do professor não os 
 node scripts/empacotar-entrega.mjs
 ```
 
-Gera `entrega/rede-alimentams.zip` a partir do **último commit** (alterações não commitadas ficam de fora), sem os itens marcados `export-ignore` em `.gitattributes`. Commite antes de empacotar. A pasta `entrega/` não é versionada.
+Gera `entrega/rede-alimentams.zip` e copia o relatório para `entrega/Relatorio_Tecnico_Rede_AlimentaMS.pdf` (o professor quer o PDF separado do zip). O zip sai do **último commit** (alterações não commitadas ficam de fora), sem os itens marcados `export-ignore` em `.gitattributes`. Commite antes de empacotar. A pasta `entrega/` não é versionada.
 
 ### Compartilhar com o grupo
 

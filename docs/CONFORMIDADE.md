@@ -60,7 +60,7 @@ Motivo da troca: prazo. Um único arquivo de front sem etapa de build é mais si
 | Senhas com bcrypt | ✅ | Custo 10. |
 | HTTPS / TLS 1.3 | ❌ | Execução local em HTTP. A configuração com HTTPS está pronta (Caddy), mas não foi usada. |
 | Logs imutáveis de cada doação | ✅ | Gatilho no banco impede UPDATE/DELETE em `doacoes`; eventos de cada lote em `eventos_lote`. |
-| Termo de responsabilidade / LGPD | 🟡 | Aceite obrigatório com data e versão; termos v2 citam a Lei 15.224/2025 (que revogou a 14.016/2020) e a LGPD, conferidas em fonte oficial. Sem revisão jurídica; controlador, contato e retenção dependem do grupo. |
+| Termo de responsabilidade / LGPD | 🟡 | Aceite obrigatório com data e versão; termos v2 citam a Lei 15.224/2025 (que revogou a 14.016/2020) e a LGPD, conferidas em fonte oficial. Sem revisão jurídica; escritos para um protótipo sem dados reais. |
 | Proteções adicionais | ✅ | Não estavam na Etapa 4: 5 códigos de retirada errados bloqueiam o lote por 15 min; limite de tentativas de login; SQL parametrizado; HTML escapado; anexos validados pelo conteúdo do arquivo. |
 
 ## 5. Fluxos (seção 4)

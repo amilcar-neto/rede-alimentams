@@ -251,3 +251,9 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Base: versão verificada (texto Claude + fontes conferidas pelo Codex), com tabela de estados e pendências de uso real do relatório Codex. Rascunhos movidos para docs/agentes/historico/relatorios/.
 - Código alinhado ao relatório: termos v2 (Lei 15.224/2025; v1 preservada em termos-2026-10-v1.html), CNPJ alfanumérico, aviso de equivalências simuladas no painel global e em Meus números, cartão "kg entregues em doações". npm test 178/178; telas conferidas no Docker.
 - Saída: docs/RELATORIO_TECNICO_FINAL.md e .pdf (15 páginas).
+
+## 28/10/2026 — Fechamento da entrega (Claude)
+
+- Pedido do usuário: relatório e código prontos, sem pendências [GRUPO]/[VERIFICAR]. Relatório final sem marcadores (pesquisa declarada como documental; teste do QR no celular de um integrante; apêndice de capturas removido). Termos v2 sem marcadores: protótipo acadêmico sem dados reais, integrantes como responsáveis. Teste L06 atualizado para exigir ausência de marcadores.
+- Pesquisa de dados locais pedida pelo usuário: bloqueada (WebSearch/WebFetch negados nas configurações e navegação recusada pelo classificador). Mantidos os dados nacionais conferidos pelo Codex.
+- Relatório fora do zip (export-ignore); o script de empacotamento copia o PDF para entrega/.

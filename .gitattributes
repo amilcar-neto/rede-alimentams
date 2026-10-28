@@ -23,3 +23,7 @@ docs/ROTEIRO_DEMO.md export-ignore
 docs/ROTEIRO_PRINTS.md export-ignore
 docs/*.pdf export-ignore
 docs/*.docx export-ignore
+
+# Relatório técnico: vai separado do zip (scripts/empacotar-entrega.mjs copia o PDF para entrega/)
+docs/RELATORIO_TECNICO_FINAL.md export-ignore
+docs/RELATORIO_TECNICO_FINAL.pdf export-ignore

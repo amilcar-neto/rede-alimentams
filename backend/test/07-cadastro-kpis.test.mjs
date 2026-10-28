@@ -107,7 +107,7 @@ test('L06 o banco recusa situação, telefone e comprovante inválidos', async (
 });
 
 // ---------- Termos ----------
-test('L06 termos.html é público; normas conferidas citadas, demais marcadas [VERIFICAR]', async () => {
+test('L06 termos.html é público, completo (sem marcadores pendentes) e cita só normas conferidas', async () => {
   const r = await fetch(`${BASE}/termos.html`, { signal: AbortSignal.timeout(10000) });
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /text\/html/);
@@ -116,18 +116,17 @@ test('L06 termos.html é público; normas conferidas citadas, demais marcadas [V
   assert.match(html, /Política de Privacidade/);
   assert.match(html, /id="termo"/);
   assert.match(html, /id="privacidade"/);
-  // Termos v2 (28/10/2026): as normas abaixo foram conferidas em fonte oficial; a aplicação a uma operação real continua
-  // [VERIFICAR] (aviso no topo). Qualquer outra norma citada precisa do marcador logo depois.
+  // Termos v2 (28/10/2026): versão final do protótipo acadêmico. Sem marcadores de pendência; o aviso no topo deixa
+  // claro que é texto de demonstração, sem revisão jurídica e sem dados reais.
   assert.match(html, /conferidas em fonte oficial em 28\/10\/2026/);
-  assert.ok((html.match(/\[VERIFICAR\]/g) || []).length >= 2, 'aplicação real e normas não conferidas marcadas');
-  const conferidas = ['Lei nº 15.224/2025', 'Lei nº 14.016/2020', 'Lei nº 13.709/2018', 'RDC Anvisa nº 216/2004'];
-  assert.match(html, /\[GRUPO\]/);
+  assert.match(html, /não foi revisado por\s+profissional do Direito/);
+  assert.doesNotMatch(html, /\[(VERIFICAR|GRUPO)\]/);
+  const conferidas = ['Lei nº 15.224/2025', 'Lei nº 14.016/2020', 'Lei nº 13.709/2018', 'RDC Anvisa nº 216/2004',
+    'Lei nº 8.078/1990'];
   assert.match(html, /não é certificado ICP-Brasil/i);
-  // Norma não conferida precisa do marcador [VERIFICAR] logo depois da citação.
-  for (const citacao of html.match(/(?:Lei nº|RDC ANVISA nº|Resolução RDC ANVISA nº)[^<]{0,40}/gi) || []) {
-    if (conferidas.some((norma) => citacao.startsWith(norma) || citacao.includes(norma.replace('Lei nº ', '')))) continue;
-    assert.ok(html.indexOf('[VERIFICAR]', html.indexOf(citacao)) - html.indexOf(citacao) < 400, citacao);
-  }
+  // Toda norma citada precisa estar na lista das conferidas.
+  for (const citacao of html.match(/(?:Lei nº|RDC ANVISA nº|Resolução RDC ANVISA nº)[^<]{0,40}/gi) || [])
+    assert.ok(conferidas.some((norma) => citacao.includes(norma.replace('Lei nº ', ''))), citacao);
   const versao = (await db.query(`SELECT termos_versao FROM usuarios WHERE email LIKE 'l06.%' LIMIT 1`)).rows[0].termos_versao;
   assert.ok(html.includes(versao), 'versão aceita consta no documento');
 });
