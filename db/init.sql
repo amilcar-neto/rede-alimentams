@@ -41,19 +41,20 @@ CREATE TABLE doacoes (
 );
 
 -- ===== Dados de demonstração (senha de todos: 123456) =====
+-- CNPJs numéricos sintéticos com dígitos verificadores, sem consulta cadastral.
 -- Coordenadas aproximadas de bairros de Campo Grande/MS
 INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao) VALUES
- ('Supermercado Comper - Centro','comper@demo.com', crypt('123456', gen_salt('bf')),'doador','00.000.000/0001-01','Centro',
+ ('Supermercado Comper - Centro','comper@demo.com', crypt('123456', gen_salt('bf')),'doador','00000001000136','Centro',
    ST_SetSRID(ST_MakePoint(-54.6201,-20.4697),4326)::geography),
- ('Restaurante Sabor MS','sabor@demo.com', crypt('123456', gen_salt('bf')),'doador','00.000.000/0001-02','Jardim dos Estados',
+ ('Restaurante Sabor MS','sabor@demo.com', crypt('123456', gen_salt('bf')),'doador','00000002000180','Jardim dos Estados',
    ST_SetSRID(ST_MakePoint(-54.5870,-20.4540),4326)::geography),
- ('Padaria Pão Nosso','pao@demo.com', crypt('123456', gen_salt('bf')),'doador','00.000.000/0001-03','Monte Castelo',
+ ('Padaria Pão Nosso','pao@demo.com', crypt('123456', gen_salt('bf')),'doador','00000003000125','Monte Castelo',
    ST_SetSRID(ST_MakePoint(-54.5953,-20.4553),4326)::geography),
- ('Casa de Apoio Esperança','esperanca@demo.com', crypt('123456', gen_salt('bf')),'receptora','00.000.000/0001-04','Monte Castelo',
+ ('Casa de Apoio Esperança','esperanca@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000004000170','Monte Castelo',
    ST_SetSRID(ST_MakePoint(-54.5960,-20.4570),4326)::geography),
- ('Cozinha Solidária Amambai','amambai@demo.com', crypt('123456', gen_salt('bf')),'receptora','00.000.000/0001-05','Amambai',
+ ('Cozinha Solidária Amambai','amambai@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000005000114','Amambai',
    ST_SetSRID(ST_MakePoint(-54.6070,-20.4830),4326)::geography),
- ('Associação Longe Demais','longe@demo.com', crypt('123456', gen_salt('bf')),'receptora','00.000.000/0001-06','Distrito distante',
+ ('Associação Longe Demais','longe@demo.com', crypt('123456', gen_salt('bf')),'receptora','00000006000169','Distrito distante',
    ST_SetSRID(ST_MakePoint(-54.9000,-20.9000),4326)::geography);
 
 INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade) VALUES

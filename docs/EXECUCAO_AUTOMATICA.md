@@ -49,6 +49,23 @@ e o histórico de arquivos são compartilhados; conversas e limites não são.
 antes de abrir outra execução. Se a árvore de processos não puder ser encerrada,
 ele mantém a trava e exige verificação manual; não presume que a pasta está livre.
 
+## Modo sem parada (`neverStop: true`, padrão desde 28/10/2026)
+
+Pedido do usuário para rodar a noite sem intervenção:
+- Codex bloqueado, com erro de CLI ou recusa: o Codex é desativado nesta execução
+  (`scheduler.codexOff` em `.agentes/estado.json`) e o Claude segue sozinho.
+- Claude bloqueado ou com erro: espera `retryMinutes` e tenta de novo a mesma etapa, com o motivo
+  no feedback. Cota do Claude: espera a renovação informada (ou 60 min) e volta ao Claude.
+- Conferência visual impossível vira "Conferência visual humana PENDENTE" no checklist, sem
+  bloquear o lote. Nunca é declarada como feita.
+- O Claude usa `--setting-sources user`: as negações de `.claude/settings.json` (curl, wget etc.)
+  não se aplicam a ele. Continuam proibidos `git push`, `git remote`, `ssh` e `scp` (`claude.disallowedTools`).
+- Uma negação que o Claude contorna e que termina a etapa não derruba mais a execução (evento `permission-denials`).
+- Continuam parando: arquivo protegido alterado, troca de branch, revisor editando código,
+  processos que não encerram e conflito de merge.
+- Para voltar ao modo antigo: `"neverStop": false` em `.agentes/config.local.json`. Para reativar o
+  Codex, ajuste `codexOff` com o controlador parado.
+
 ## Hierarquia e relógio
 
 1. Codex executa as etapas até informar cota esgotada.
@@ -56,6 +73,30 @@ ele mantém a trava e exige verificação manual; não presume que a pasta está
 3. Com ambos limitados, o controlador espera 60 minutos e começa por Codex.
 4. Se Codex continuar limitado, tenta Claude. Se ambos falharem por cota, repete
    a espera. Não há limite de ciclos de cota enquanto houver trabalho pendente.
+
+Exceção autorizada: se Codex retornar `blocked` com `block_reason: tool_unavailable`
+e evidência de ferramenta ausente ou desconectada, o controlador salva o trabalho
+e transfere a etapa pendente ao Claude uma única vez por lote. Claude verifica
+se possui acesso autorizado (inclusive conexão à extensão Claude no Edge), executa
+o roteiro restante e registra evidências. A extensão instalada não comprova conexão
+com a CLI. Testes e revisão continuam obrigatórios antes da integração.
+
+A transferência persiste entre retomadas, não marca cota esgotada e não ocorre
+se Claude já estiver limitado. Se Claude também não conseguir, o controlador para.
+Negativa de permissão (`permission_denied`), bloqueio antigo sem classificação,
+falta de evidência, banco, login e erros de CLI continuam bloqueando. Não
+reclassificar negativas históricas como ferramenta ausente para provocar a troca.
+Para solicitar explicitamente uma retomada pelo Claude com sua própria conexão
+autorizada à extensão, use `agentes.cmd retomar --claude`. O controlador registra
+a escolha, preserva o diagnóstico anterior e seleciona Claude sem simular cota.
+Isso não autoriza contornar negativas de acesso. Se Claude também receber uma
+negativa, a execução para. Não há aceite visual até o roteiro ser executado.
+
+O adaptador Claude habilita a integração da extensão com `--chrome`, confirmado
+no `--help` da CLI instalada. O nome dessa opção é da CLI; a compatibilidade e
+conexão com a extensão instalada no Edge precisam ser verificadas na execução.
+`claude.chrome: false` desativa a integração na configuração. O comando retomar
+deve ser executado pelo operador, com nenhum outro executor ativo.
 
 Claude não é interrompido para sondar Codex. Cada tentativa é uma execução real
 do trabalho pendente, sem chamadas extras de sondagem. Datas explícitas e

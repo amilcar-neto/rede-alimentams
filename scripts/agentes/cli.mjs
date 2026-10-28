@@ -8,6 +8,8 @@ import { atomicJson, readJson, acquireLock, Scheduler, classify, providerCommand
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const MINUTE = 60_000;
+// Recoverable stop: with config.neverStop, the controller switches/waits instead of ending.
+class SoftStop extends Error {}
 const identity = ['-c', 'user.name=Rede AlimentaMS Automacao', '-c', 'user.email=automacao@localhost'];
 
 export function loadConfig(root) {
@@ -91,6 +93,7 @@ function integrate(root, task, state, p, scheduler) {
   }
   task.status = 'ok'; task.finishedAt = iso(); task.integratedCommit = git(root, ['rev-parse', 'HEAD']).stdout.trim();
   state.current++;
+  scheduler.codexOff = false; // A Codex failure only sidelines it for the lot where it happened.
   save(p, state, scheduler);
   logEvent(p, 'complete', `${task.id} validado e integrado. Próximo lote mantém ${scheduler.provider} até o limite.`);
 }
@@ -112,10 +115,25 @@ ready significa que todo o escopo desta etapa e seus critérios de aceite estão
 continue significa progresso parcial salvo; blocked significa impedimento que não se resolve sem intervenção.
 O L00 deve aproveitar AGENTS.md/CLAUDE.md existentes, sem reescrever regras ou controlador.
 Banco ausente, permissão negada ou dependência obrigatória faltante: informe blocked com diagnóstico.`}
+Informe block_reason: none sem bloqueio; tool_unavailable somente quando a ferramenta necessária
+não existe/não está conectada nesta CLI, com evidência concreta; permission_denied para qualquer
+negativa de acesso/permissão; other para banco, autenticação ou demais impedimentos.
+Não reclassifique uma negativa já registrada como indisponibilidade. No Claude, se precisar de
+navegador, use a extensão Claude in Chrome (ferramentas mcp__claude-in-chrome__*); não presuma que está conectada.
+Para abrir o app local: rode somente \`node backend/src/server.js\` em segundo plano (run_in_background),
+sem combinar com curl, wget, sleep, & ou redirecionamentos (curl é proibido pelas regras do projeto).
+O ambiente já aponta DATABASE_URL para o banco descartável de testes; a porta padrão é 3000.
+Confira pelo navegador (http://localhost:3000) e encerre o servidor ao terminar.
+Se um comando for negado, tente uma alternativa permitida antes de informar blocked.
+Conferência visual: tente pelo navegador. Se, depois de tentar, ela for impossível nesta CLI, NÃO bloqueie
+o lote só por isso: registre no checklist "Conferência visual humana PENDENTE" com o roteiro exato e o
+diagnóstico, e siga (ready se todo o restante do escopo e dos testes estiver cumprido). Nunca declare a
+conferência visual como feita sem tê-la feito.
+Retome o roteiro pendente e preserve as evidências válidas. Nunca contorne uma negativa de permissão.
 Não crie subagentes nem abra outros executores. Não altere controlador, fila, configurações, instruções,
 plano, documentos originais ou .agentes/. Não acesse VPS, não publique nem envie mensagens.
 Último retorno/feedback: ${task.feedback || 'nenhum; confira os arquivos e o Git.'}
-Responda no schema fornecido: status (continue/ready/blocked), summary, next_step e evidence (lista).
+Responda no schema fornecido: status (continue/ready/blocked), summary, next_step, evidence (lista) e block_reason.
 Não declare testes, prints, deploy ou revisão humana que não ocorreram.`;
 }
 
@@ -133,7 +151,11 @@ async function runTests(root, config, p, controls) {
 }
 
 export async function runController({ root = ROOT, config = loadConfig(root), queue,
-  execute, gate = runTests, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, resume = false } = {}) {
+  execute, gate = runTests, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), now = Date.now, resume = false,
+  requestedProvider } = {}) {
+  if (requestedProvider !== undefined && (!resume || requestedProvider !== 'claude')) {
+    throw new Error('Seleção explícita suportada apenas em retomar --claude.');
+  }
   const p = paths(root); fs.mkdirSync(p.logs, { recursive: true });
   const lock = acquireLock(p.lock);
   let interrupted = false;
@@ -143,20 +165,28 @@ export async function runController({ root = ROOT, config = loadConfig(root), qu
   let state, scheduler;
   try {
     if (fs.existsSync(p.stop)) fs.unlinkSync(p.stop);
-    state = readJson(p.state, initialState(queue ?? readJson(path.join(root, 'scripts/agentes/fila.json'))));
+    state = readJson(p.state) ?? initialState(queue ?? readJson(path.join(root, 'scripts/agentes/fila.json')));
     scheduler = new Scheduler(state.scheduler);
     if (state.status === 'concluido') { console.log('Plano já concluído. Veja .agentes/estado.json e os relatórios.'); return; }
     if (state.status === 'bloqueado' && !resume) throw new Error('Execução bloqueada: corrija o motivo e use agentes.cmd retomar.');
     setupGit(root, state);
+    if (requestedProvider) {
+      scheduler.provider = requestedProvider;
+      scheduler.waitUntil = null;
+      const task = state.queue[state.current];
+      if (task) task.feedback = `${task.feedback || ''}\nO usuário solicitou explicitamente retomar pelo Claude. Verifique a conexão própria autorizada com a extensão do navegador e execute o roteiro pendente. A negativa anterior do Codex permanece registrada; não altere permissões nem contorne negativas. Se sua conexão também for negada ou indisponível, informe blocked com o diagnóstico.`;
+      logEvent(p, 'provider-request', 'Retomada pelo Claude solicitada explicitamente pelo usuário; verificar acesso próprio autorizado.');
+    }
     state.status = 'executando'; save(p, state, scheduler);
     logEvent(p, 'start', `Controlador iniciado. Preferência atual: ${scheduler.provider}.`);
     let nextHeartbeat = Date.now() + config.heartbeatMinutes * MINUTE;
     while (state.current < state.queue.length && !shouldStop()) {
       const task = state.queue[state.current];
+      try {
       if (task.phase === 'integrate') { integrate(root, task, state, p, scheduler); continue; }
       if (scheduler.waitUntil) {
         state.status = 'aguardando_cota'; save(p, state, scheduler);
-        logEvent(p, 'wait', `Ambas limitadas. Próxima tentativa: ${new Date(scheduler.waitUntil).toLocaleString('pt-BR')}; Codex primeiro.`, { until: scheduler.waitUntil });
+        logEvent(p, 'wait', `Aguardando. Próxima tentativa: ${new Date(scheduler.waitUntil).toLocaleString('pt-BR')}; ${scheduler.codexOff ? 'Claude (Codex desativado nesta execução)' : 'Codex primeiro'}.`, { until: scheduler.waitUntil });
         process.stdout.write('\x07');
         while (now() < Date.parse(scheduler.waitUntil) && !shouldStop()) await sleep(Math.min(1000, Date.parse(scheduler.waitUntil) - now()));
         if (shouldStop()) break;
@@ -206,19 +236,33 @@ export async function runController({ root = ROOT, config = loadConfig(root), qu
         logEvent(p, 'quota', `${provider} atingiu limite; progresso salvo.`, { retryAt: outcome.retryAt });
         save(p, state, scheduler); continue;
       }
-      if (outcome.kind !== 'success') throw new Error(outcome.reason);
+      if (outcome.kind !== 'success') throw new SoftStop(outcome.reason);
+      if (outcome.permissionDenials) logEvent(p, 'permission-denials', `${task.id}: ${outcome.permissionDenials} comando(s) negado(s); o executor seguiu com alternativa.`);
       scheduler.success();
       Object.assign(invocation, { actualModel: outcome.actualModel, sessionId: outcome.sessionId, report: outcome.report });
       const report = outcome.report;
       task.feedback = `${report.summary}\nPróximo passo: ${report.next_step}`;
       logEvent(p, 'response', `${task.id}: ${report.summary}`, { status: report.status });
-      if (report.status === 'blocked') throw new Error(task.feedback);
+      if (report.status === 'blocked') {
+        // Codex has no approved browser here; Claude has its own (Chrome extension). Hand off
+        // once per lot so Claude can try with its own access. Claude's own denial still blocks.
+        if (provider === 'codex' && ['tool_unavailable', 'permission_denied'].includes(report.block_reason)
+          && report.evidence.length && !task.toolHandoff && !scheduler.limited.claude) {
+          task.toolHandoff = { from: provider, to: 'claude', at: iso(), reason: report.summary,
+            blockReason: report.block_reason, evidence: report.evidence };
+          scheduler.provider = 'claude';
+          task.feedback += '\nTransferência única do Codex para o Claude (ferramenta indisponível ou acesso negado no Codex). Use seu próprio acesso autorizado, retome o roteiro pendente e registre evidências; se não conseguir, informe blocked. A negativa do Codex continua registrada; não contorne negativas.';
+          logEvent(p, 'tool-handoff', `${task.id}: Codex sem acesso à ferramenta; Claude tentará a etapa pendente uma vez.`);
+          save(p, state, scheduler); continue;
+        }
+        throw new SoftStop(task.feedback);
+      }
       if (report.status === 'continue' && fingerprint(root, true) === before) task.noProgress++;
       else task.noProgress = 0;
-      if (task.noProgress >= config.maxNoProgress) throw new Error('Chamadas repetidas sem alterações verificáveis; interrompendo para evitar consumo indefinido.');
+      if (task.noProgress >= config.maxNoProgress) throw new SoftStop('Chamadas repetidas sem alterações verificáveis; interrompendo para evitar consumo indefinido.');
       if (task.phase === 'review' && report.status === 'continue') {
         task.fixRounds++;
-        if (task.fixRounds > config.maxFixRounds) throw new Error('Limite de rodadas de correção atingido; confira revisão e feedback.');
+        if (task.fixRounds > config.maxFixRounds) throw new SoftStop('Limite de rodadas de correção atingido; confira revisão e feedback.');
         task.phase = 'implement';
       } else if (report.status === 'ready') {
         const testResult = await gate(root, config, p, controls);
@@ -233,7 +277,7 @@ export async function runController({ root = ROOT, config = loadConfig(root), qu
           task.fixRounds++;
           task.feedback = `O controlador executou npm test e falhou:\n${task.tests.output}`;
           task.phase = 'implement';
-          if (task.fixRounds > config.maxFixRounds) throw new Error('Testes continuam falhando após rodadas de correção.');
+          if (task.fixRounds > config.maxFixRounds) throw new SoftStop(`Testes continuam falhando após rodadas de correção:\n${task.tests.output}`);
           logEvent(p, 'test-failure', `Testes de ${task.id} falharam; executor receberá a saída.`);
         } else if (task.phase === 'implement' && task.critical) {
           task.phase = 'review'; task.feedback = 'Implementação pronta e npm test passou. Verifique requisitos, diff e qualidade dos testes.';
@@ -245,6 +289,31 @@ export async function runController({ root = ROOT, config = loadConfig(root), qu
         }
       }
       save(p, state, scheduler);
+      } catch (error) {
+        // Never-stop mode: blocks, CLI errors and exhausted retry rounds do not end the night.
+        // Codex is switched off and Claude carries on; Claude itself retries after retryMinutes.
+        // Safety errors (protected files, branch change, reviewer editing code, stuck processes) still stop.
+        if (!(error instanceof SoftStop) || !config.neverStop) throw error;
+        const failed = scheduler.provider;
+        task.noProgress = 0; task.fixRounds = 0;
+        task.softFailures = (task.softFailures ?? 0) + 1;
+        task.feedback = `${error.message}\nModo sem parada: resolva o impedimento com alternativas permitidas; se algo depender de pessoa (ex.: conferência visual), registre como pendência humana com roteiro e prossiga. Não declare nada que não ocorreu.`;
+        if (failed === 'codex' && !scheduler.codexOff) {
+          scheduler.codexOff = true; scheduler.provider = 'claude';
+          logEvent(p, 'codex-off', `${task.id}: Codex parou (${error.message.split('\n')[0]}). Seguindo só com o Claude.`);
+        } else if (failed === 'codex' && scheduler.limited.claude) {
+          // Codex covered for a rate-limited Claude and failed: wait for Claude's reset.
+          scheduler.provider = 'claude';
+          const reset = Date.parse(scheduler.retryAt.claude);
+          scheduler.waitUntil = new Date(Number.isFinite(reset) && reset > now() ? reset : now() + config.retryMinutes * MINUTE).toISOString();
+          logEvent(p, 'soft-retry', `${task.id}: Codex não conseguiu cobrir o Claude limitado. Aguardando renovação do Claude.`);
+        } else {
+          scheduler.provider = 'claude';
+          scheduler.waitUntil = new Date(now() + config.retryMinutes * MINUTE).toISOString();
+          logEvent(p, 'soft-retry', `${task.id}: Claude parou (${error.message.split('\n')[0]}). Nova tentativa em ${config.retryMinutes} min.`);
+        }
+        save(p, state, scheduler);
+      }
     }
     state.status = state.current === state.queue.length ? 'concluido' : 'parado';
     save(p, state, scheduler);
@@ -325,6 +394,10 @@ async function main() {
     process.exitCode = result.status ?? 1; return;
   }
   if (!['iniciar', 'retomar'].includes(command)) throw new Error('Comandos: banco, iniciar, retomar, status, parar, diagnostico, testar.');
-  await runController({ resume: command === 'retomar' });
+  const options = process.argv.slice(3);
+  if (options.some(option => option !== '--claude') || (options.length && command !== 'retomar')) {
+    throw new Error('Opção suportada: agentes.cmd retomar --claude.');
+  }
+  await runController({ resume: command === 'retomar', requestedProvider: options.includes('--claude') ? 'claude' : undefined });
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => { console.error(error.message); process.exitCode = 1; });

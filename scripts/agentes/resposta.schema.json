@@ -4,8 +4,9 @@
     "status": { "type": "string", "enum": ["continue", "ready", "blocked"] },
     "summary": { "type": "string" },
     "next_step": { "type": "string" },
+    "block_reason": { "type": "string", "enum": ["none", "tool_unavailable", "permission_denied", "other"] },
     "evidence": { "type": "array", "items": { "type": "string" } }
   },
-  "required": ["status", "summary", "next_step", "evidence"],
+  "required": ["status", "summary", "next_step", "evidence", "block_reason"],
   "additionalProperties": false
 }
