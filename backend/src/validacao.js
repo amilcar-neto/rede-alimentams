@@ -82,6 +82,19 @@ function data(valor) {
   return entrada;
 }
 
+// Data e hora local de Campo Grande, sem fuso: AAAA-MM-DDTHH:MM (fim do dia = 00:00 do dia seguinte).
+function dataHora(valor, campo) {
+  const entrada = texto(valor, campo, 16);
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/.exec(entrada);
+  if (!m) falhar(`${campo} inválido(a). Use o formato AAAA-MM-DDTHH:MM.`);
+  const hora = Number(m[2]), minuto = Number(m[3]);
+  const instante = new Date(m[1] + 'T00:00:00Z');
+  if (m[1].startsWith('0000-') || !Number.isFinite(instante.getTime()) ||
+      instante.toISOString().slice(0, 10) !== m[1] || hora > 23 || minuto > 59)
+    falhar(`${campo} inválido(a).`);
+  return entrada;
+}
+
 function id(valor) {
   if (typeof valor !== 'string' || !/^[1-9]\d{0,9}$/.test(valor) || Number(valor) > 2147483647)
     falhar('ID inválido: informe um inteiro positivo.');
@@ -94,4 +107,4 @@ function codigo(valor) {
   return normalizado;
 }
 
-module.exports = { ErroValidacao, corpo, texto, opcao, email, senha, cnpj, CATEGORIAS, quantidade, data, id, codigo };
+module.exports = { ErroValidacao, corpo, texto, opcao, email, senha, cnpj, CATEGORIAS, quantidade, data, dataHora, id, codigo };

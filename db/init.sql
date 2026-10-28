@@ -22,12 +22,27 @@ CREATE TABLE lotes (
   quantidade_kg  NUMERIC(10,2) NOT NULL CHECK (quantidade_kg > 0),
   validade       DATE NOT NULL,
   status         TEXT NOT NULL DEFAULT 'disponivel'
-                 CHECK (status IN ('disponivel','reservado','entregue')),
+                 CHECK (status IN ('disponivel','reservado','entregue','expirado')),
   reservado_por  INT REFERENCES usuarios(id),
   reservado_em   TIMESTAMPTZ,
   codigo         CHAR(6),
-  criado_em      TIMESTAMPTZ NOT NULL DEFAULT now()
+  janela_inicio  TIMESTAMPTZ,
+  janela_fim     TIMESTAMPTZ,
+  criado_em      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK ((janela_inicio IS NULL) = (janela_fim IS NULL))
 );
+CREATE INDEX idx_lotes_status ON lotes (status);
+
+-- Histórico do ciclo de vida. usuario_id é o ator (doador que publicou/entregou)
+-- ou a ONG afetada (reservou/perdeu a reserva); nulo quando o sistema expira o lote.
+CREATE TABLE eventos_lote (
+  id          SERIAL PRIMARY KEY,
+  lote_id     INT NOT NULL REFERENCES lotes(id),
+  tipo        TEXT NOT NULL CHECK (tipo IN ('publicado','reservado','liberado','expirado','entregue')),
+  usuario_id  INT REFERENCES usuarios(id),
+  criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_eventos_lote ON eventos_lote (lote_id, id);
 
 CREATE TABLE doacoes (
   id           SERIAL PRIMARY KEY,
@@ -62,3 +77,6 @@ INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade) VALU
  (3,'Pães e panificados','Panificados',8,      (now() AT TIME ZONE 'America/Campo_Grande')::date + 1),
  (1,'Frutas variadas','Hortifrúti',50,         (now() AT TIME ZONE 'America/Campo_Grande')::date + 2),
  (1,'Iogurtes e queijos','Laticínios',15,      (now() AT TIME ZONE 'America/Campo_Grande')::date + 4);
+
+INSERT INTO eventos_lote (lote_id, tipo, usuario_id)
+SELECT id, 'publicado', doador_id FROM lotes;

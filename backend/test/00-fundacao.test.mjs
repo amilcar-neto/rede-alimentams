@@ -39,6 +39,7 @@ test('Servidor filho e cliente pg usam o mesmo banco de teste', async () => {
     assert.equal(response.s, 201);
     assert.equal((await client.query('SELECT alimento FROM lotes WHERE id=$1', [response.d.id])).rows[0]?.alimento,
       'Sentinela conexão L00');
+    await client.query('DELETE FROM eventos_lote WHERE lote_id=$1', [response.d.id]);
     await client.query('DELETE FROM lotes WHERE id=$1', [response.d.id]);
   } finally { await client.end(); }
 });

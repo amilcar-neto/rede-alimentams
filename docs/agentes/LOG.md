@@ -100,3 +100,12 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Conferência visual: não aplicável (sem mudança de interface); não realizada.
 - Limitações: nada testado no VPS (DNS, TLS, firewall, WebSocket); contas demo do init.sql com senha conhecida marcadas [GRUPO]; revisão independente pendente.
 - Próximo passo: controlador repete testes e chama revisão por risco (portas/segredos); grupo faz o deploy pelo DEPLOY.md.
+
+## 28/10/2026 — L02 — implementação claude
+
+- Papel: executor (Claude), sem subagentes. Branch `lote/L02`, Git limpo no início. Sem VPS, publicação, mensagens, commits, staging ou alterações em .git/.agentes/controlador/plano.
+- Entregue: janela de retirada obrigatória na reserva (máx. 2 h, de agora até o fim do dia da validade, horário de Campo Grande), `atualizarStatus()` no início das rotas de lotes (reserva vencida + `TOLERANCIA_MINUTOS`, padrão 30 → volta a `disponivel`; lote vencido → `expirado`), tabela `eventos_lote`, 409 em `confirmar-retirada` para lote expirado/reserva liberada, front com formulário de janela, "ONG X retira entre hh:mm–hh:mm", Ativos/Expirados e etiqueta "vencido".
+- Testes: `npm.cmd test` em backend/: código 0, **87 pass / 0 fail / 0 todo / 0 skipped / 0 cancelled**, ≈17,1 s. Novo `03-ciclo-vida.test.mjs` (12 testes: janelas inválidas, envelhecimento no banco, redirecionamento, código antigo, expiração, concorrência, histórico, front). Testes existentes adaptados só ao novo contrato (reserva exige janela; limpeza da sentinela do L00 remove seus eventos).
+- Conferência visual feita pelo Claude in Chrome (app local, banco descartável): formulário de janela, erro de 3 h, reserva válida, visão do doador e seções Ativos/Expirados; corrigido CSS que cortava os campos. Sem prints em disco. Detalhes no [checklist L02](progresso/L02.md).
+- Limitações: bancos existentes precisam do schema novo (sem migração automática); `docs/testes/e2e-api.mjs` histórico não atualizado; revisão independente pendente.
+- Próximo passo: controlador repete testes e chama revisão por risco (transições de estado/concorrência).

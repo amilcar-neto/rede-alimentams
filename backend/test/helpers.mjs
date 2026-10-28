@@ -8,6 +8,23 @@ export const hoje = new Intl.DateTimeFormat('en-CA', {
 }).format(new Date());
 export const dia = (n) => new Date(Date.parse(hoje + 'T12:00:00Z') + n * 86400e3).toISOString().slice(0, 10);
 
+// Horário local de Campo Grande (AAAA-MM-DDTHH:MM), deslocado em minutos a partir de agora.
+export function local(minutos = 0) {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Campo_Grande', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(Date.now() + minutos * 60000));
+  const valor = (tipo) => partes.find((p) => p.type === tipo).value;
+  return `${valor('year')}-${valor('month')}-${valor('day')}T${valor('hour')}:${valor('minute')}`;
+}
+
+// Janela de retirada válida: de agora até 1 h depois, limitada ao fim do dia da validade.
+export function janela(validade = dia(2), duracao = 60) {
+  const limite = new Date(Date.parse(validade + 'T12:00:00Z') + 86400e3).toISOString().slice(0, 10) + 'T00:00';
+  const fim = local(duracao);
+  return { janela_inicio: local(), janela_fim: fim > limite ? limite : fim };
+}
+
 export async function call(method, url, body, token) {
   const response = await fetch('http://127.0.0.1:3100' + url, {
     method,

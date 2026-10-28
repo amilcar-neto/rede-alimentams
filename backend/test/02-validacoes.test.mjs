@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
 import { once } from 'node:events';
-import { call, login, dia } from './helpers.mjs';
+import { call, login, dia, janela } from './helpers.mjs';
 import { testClient, testConnection } from './reset-db.mjs';
 
 const require = createRequire(import.meta.url);
@@ -70,7 +70,7 @@ test('L01 fuzz dos IDs nas duas operações impede casts inválidos no PostgreSQ
     erroJson(await call('PUT', `/lotes/${encodeURIComponent(id)}/reservar`, {}, receptora));
     erroJson(await call('PUT', `/lotes/${encodeURIComponent(id)}/confirmar-retirada`, { codigo: '123456' }, doador));
   }
-  erroJson(await call('PUT', '/lotes/2147483647/reservar', {}, receptora), 409);
+  erroJson(await call('PUT', '/lotes/2147483647/reservar', janela(), receptora), 409);
   erroJson(await call('PUT', '/lotes/2147483647/confirmar-retirada', { codigo: '123456' }, doador));
   for (const [operacao, corpo, token] of [['reservar', {}, receptora], ['confirmar-retirada', { codigo: '123456' }, doador]]) {
     for (const id of ['%ZZ', '%E0%A4%A'])
@@ -82,12 +82,12 @@ test('L01 fuzz do código e do corpo de reserva não modifica o estado', async (
   const publicado = await call('POST', '/lotes', lote, doador);
   assert.equal(publicado.s, 201);
   const id = publicado.d.id;
-  // Reserva não recebe campos: nenhum dado extra pode interferir na operação.
+  // Reserva só aceita a janela: nenhum outro dado pode interferir na operação.
   for (const valor of tipos) {
-    if (valor !== undefined) erroJson(await call('PUT', `/lotes/${id}/reservar`, { codigo: valor }, receptora));
+    if (valor !== undefined) erroJson(await call('PUT', `/lotes/${id}/reservar`, { ...janela(), codigo: valor }, receptora));
     erroJson(await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo: valor }, doador));
   }
-  const reservado = await call('PUT', `/lotes/${id}/reservar`, undefined, receptora);
+  const reservado = await call('PUT', `/lotes/${id}/reservar`, janela(), receptora);
   assert.equal(reservado.s, 200);
   // Código numérico JSON, inclusive o valor correto, deve ser rejeitado.
   erroJson(await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo: Number(reservado.d.codigo) }, doador));
