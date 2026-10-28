@@ -213,3 +213,41 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Front: botões "Desistir da reserva" e "Cancelar lote" com confirmação no próprio cartão (sem diálogo do navegador), Enter envia login/cadastro, kg em pt-BR (12,5), tolerância vinda do servidor, texto de lote expirado correto quando o prazo de retirada passa.
 - Testes: `npm.cmd test` em backend/: **175 pass / 0 fail** (eram 158; novo `10-cancelamento-limites.test.mjs` com 17 testes, inclusive concorrência e WebSocket). Nenhuma asserção anterior alterada.
 - Não executado: conferência visual no navegador (servidor em segundo plano negado nesta sessão), carga (cenário medido não mudou de forma relevante). Bancos existentes precisam ser recriados (schema novo).
+
+## 28/10/2026 — Relatório técnico final — Codex
+
+- Pedido direto do usuário: consolidar relatório com o projeto já concluído. Criados `docs/RELATORIO_TECNICO.md` (fonte editável) e `docs/RELATORIO_TECNICO.pdf` (11 páginas), preservando a Etapa 4 e o pacote existente `entrega/rede-alimentams.zip` (138.546 bytes). Checklist em `progresso/RELATORIO.md`.
+- Conteúdo alinhado ao plano de aprendizagem: problema, justificativa, beneficiários, objetivos, pesquisa institucional, requisitos, solução, stack real, arquitetura, desenvolvimento, disciplinas, testes, viabilidade, sustentabilidade, limitações, melhorias, conclusão e referências. Entrega local Docker; sem atribuir React, TypeScript, VPS, PWA ou aprovação administrativa à implementação.
+- `npm.cmd test` em backend/: tentativa inicial recusada por TEST_DATABASE_URL ausente; reexecução no banco local exclusivo de testes com parâmetros fictícios do README: código 0, **176 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo**, **32446,167 ms**. Nenhum teste alterado. Fumaça 55/55 e carga de 440 requisições citadas como evidências históricas, não reexecutadas.
+- PDF gerado com ReportLab e renderizado com Poppler do runtime; todas as 11 páginas inspecionadas visualmente após ajuste de paginação e tabelas. Fonte editável em Markdown; sem DOCX, pois não há renderizador Word empacotado disponível. Original Word preservado.
+- Sem teste manual novo da aplicação, capturas, câmera física, leitura de credenciais, dados reais, VPS, publicação, mensagens, commits, integração ou alterações no controlador/runtime/configurações. Fontes institucionais públicas consultadas sem interação externa. Limites legais e fatores ambientais mantidos como [VERIFICAR]; dados de campo/orçamento como [GRUPO].
+- Resultado: documentação concluída. Próximo passo: grupo lê o relatório e o inclui na entrega. Pacote ZIP preexistente não modificado. Modelo efetivo/esforço e consumo não informados pelo cliente.
+
+## 28/10/2026 — Relatório técnico (versão Claude, para comparação)
+
+- Pedido do usuário: versão independente da do Codex para o grupo comparar. O conteúdo de `docs/RELATORIO_TECNICO.md`/`.pdf` (Codex) não foi lido nem alterado.
+- Criados `docs/RELATORIO_TECNICO_CLAUDE.md` (fonte) e `docs/RELATORIO_TECNICO_CLAUDE.pdf` (15 páginas A4, gerado por HTML + Edge headless; páginas conferidas visualmente). Integrantes: Amilcar Silva Neto e Paulo Roberto Ribeiro Dias (dupla autorizada pelo professor).
+- Sem pesquisa na web (WebFetch/WebSearch negados nas configurações do projeto): leis, estatísticas, soluções concorrentes e fatores ambientais marcados [VERIFICAR]; pesquisa de campo, custos, uso de IA e capturas marcados [GRUPO].
+- Números do relatório tirados do código e das evidências desta sessão: 176 testes, fumaça 55/55 (inclusive a partir do zip de entrega), carga de 440 requisições (docs/testes/resultado-carga.md), seed com 16 doações/378 kg.
+
+## 28/10/2026 — Verificação externa do relatório Claude — Codex
+
+- Pedido direto do usuário: conferir pendências externas e legislação. Criados `docs/RELATORIO_TECNICO_VERIFICADO.md` e `.pdf` (17 páginas), a partir do Claude, preservando todos os relatórios anteriores e o pacote existente. Achados e fontes em `docs/agentes/REVISAO_RELATORIO.md`; checklist em `progresso/VERIFICACAO_RELATORIO.md`.
+- Confirmadas Lei 15.224/2025 (revoga a 14.016/2020), LGPD atualizada, RDC 216/2004, CNPJ alfanumérico (Receita), estatísticas IBGE 2024/PNUMA 2022, ODS e páginas oficiais Sesc/Too Good To Go/Comida Invisível. Planalto bloqueou consulta; Câmara oficial acessada. Nenhuma restrição desta sessão contornada.
+- Corrigidas afirmações sem fundamento sobre concorrentes, impacto real e fila automática. Fatores 2 refeições, 2,5 kg CO2e e 350 L/kg descritos como parâmetros internos de simulação sem método identificado para a combinação. Marcadores externos retirados por confirmação ou delimitação explícita; mantidos fatos [GRUPO]. Dois integrantes da versão Claude preservados conforme LOG.
+- Achados para uso real: termos citam lei revogada; checklist não substitui avaliação profissional; controlador/contato/retenção e bases de tratamento não definidos; CNPJ alfanumérico não suportado; impacto ambiental não validado. Revisão documental não certifica conformidade jurídica, sanitária, fiscal ou de produção. Código, testes, termos e versão de aceite não alterados.
+- `npm.cmd test` em backend/: código 0, **176 pass, 0 fail/cancelled/skipped/todo**, **33251,8912 ms**, banco exclusivo descartável. Sem novos testes manuais da aplicação, câmera, prints ou reexecução da carga. PDF renderizado via Poppler e todas as páginas conferidas; corrigidas tabelas/glifo e paginação. Fonte Markdown editável.
+- Executor único, sem subagentes, VPS, publicação, mensagens, credenciais, dados reais, Git de escrita, runtime, controlador, fila ou configuração. Próximo passo: grupo completa fatos próprios; tratar adequações operacionais em tarefas específicas. Consumo/modelo efetivo não informados pelo cliente.
+
+## 28/10/2026 — Atualização do relatório Codex para consolidação posterior
+
+- Pedido direto: colocar a verificação externa e recomendações de MVP no relatório do Codex, para o Claude comparar com o próprio texto. Atualizados `docs/RELATORIO_TECNICO.md` e `.pdf` (16 páginas), sem alterar os relatórios Claude/verificado.
+- Incorporadas fontes e estatísticas verificadas no passo anterior, seção 17 de limites legais e seção 18 com prioridades, arquivos e critérios de aceite. Recomendações: atualizar lei nos termos com histórico/versionamento de aceite; identificar estimativas como simulação; aceitar CNPJ alfanumérico; definir governança e condições sanitárias para uso real; testar/reempacotar quando houver mudanças. Não apresentadas como implementadas.
+- Capa/metadados ajustados à dupla registrada no LOG. Todos os 16 renders do PDF inspecionados. Sem novos testes manuais da aplicação. `npm.cmd test` em backend/: código 0, **176 pass / 0 fail / 0 cancelled / 0 skipped / 0 todo**, **32984,2487 ms**, banco exclusivo alimentams_test. Referências mantêm as execuções históricas corretamente identificadas; a execução desta atualização não valida funcionalidades futuras.
+- Nenhuma mudança no MVP, schema, testes, termos, pacote, instruções, plano, controlador, runtime ou configuração. Sem subagentes, VPS, publicação, mensagens, operações Git de escrita, credenciais ou dados reais. Checkpoint em `progresso/RELATORIO.md`. Próximo passo: consolidação pelo Claude a ser acionada pelo usuário; não houve acionamento de outra sessão.
+
+## 28/10/2026 — Relatório final consolidado (Claude)
+
+- Base: versão verificada (texto Claude + fontes conferidas pelo Codex), com tabela de estados e pendências de uso real do relatório Codex. Rascunhos movidos para docs/agentes/historico/relatorios/.
+- Código alinhado ao relatório: termos v2 (Lei 15.224/2025; v1 preservada em termos-2026-10-v1.html), CNPJ alfanumérico, aviso de equivalências simuladas no painel global e em Meus números, cartão "kg entregues em doações". npm test 178/178; telas conferidas no Docker.
+- Saída: docs/RELATORIO_TECNICO_FINAL.md e .pdf (15 páginas).

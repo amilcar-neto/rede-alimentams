@@ -98,7 +98,7 @@ h1{color:#1b5e20}dt{font-weight:bold;margin-top:12px}dd{margin:4px 0}code{overfl
 }
 
 // Exibição em pt-BR (o hash continua calculado sobre o JSON canônico, que não muda).
-const cnpjBR = (d) => String(d ?? '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+const cnpjBR = (d) => String(d ?? '').replace(/^([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 const kgBR = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
 function paginaVerificacao(doacao) {

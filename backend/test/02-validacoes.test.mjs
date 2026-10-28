@@ -282,7 +282,8 @@ test('L01 máscara e amanhã no front: digitação, colagem e viradas em Campo G
   vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
   for (const [entrada, esperado] of [
     ['', ''], ['1', '1'], ['112', '11.2'], ['11222333000181', '11.222.333/0001-81'],
-    ['11.222.333/0001-81', '11.222.333/0001-81'], ['abc11222333000181999', '11.222.333/0001-81'],
+    ['11.222.333/0001-81', '11.222.333/0001-81'], ['11-222*333 0001 81 999', '11.222.333/0001-81'],
+    ['12abc34501de35', '12.ABC.345/01DE-35'],
   ]) {
     const input = { value: entrada };
     context.mascararCnpj(input);

@@ -388,4 +388,41 @@ test('Comprovante e verificação exibem CNPJ formatado e kg em pt-BR (hash inal
   assert.match(verificacao, /Quantidade: 12,5 kg/);
 });
 
+test('CNPJ alfanumérico: cadastro, login, listagem e comprovante; numérico continua valendo', async () => {
+  const base = { senha: '123456', perfil: 'doador', endereco: 'Rua Teste, 1 (fictício)', responsavel: 'Resp. Teste',
+    telefone: '(67) 99999-0000', bairro: 'Centro', aceite_termos: true };
+  const r = await call('POST', '/auth/register', { ...base, nome: 'Doador Alfanumérico', email: 'alfa.cnpj@example.test', cnpj: '12.abc.345/01de-35' });
+  assert.equal(r.s, 201, JSON.stringify(r));
+  assert.equal((await db.query(`SELECT cnpj FROM usuarios WHERE email = 'alfa.cnpj@example.test'`)).rows[0].cnpj, '12ABC34501DE35');
+  for (const cnpj of ['12.ABC.345/01DE-36', '12.ABC.345/01DE-3A', '12.AB*.345/01DE-35', 'AAAAAAAAAAAAAA', '12ABC34501DE3'])
+    assert.equal((await call('POST', '/auth/register', { ...base, nome: 'X', email: `alfa.${cnpj.length}.${cnpj.charCodeAt(5)}@example.test`, cnpj })).s, 400, cnpj);
+
+  const token = await login('alfa.cnpj@example.test');
+  const perfil = await call('GET', '/perfil', undefined, token);
+  assert.equal(perfil.d.cnpj, '12ABC34501DE35');
+  const id = await publicar(token);
+  const ok = await confirmar(id, await reservar(id, esperanca), token);
+  assert.equal(ok.s, 200, JSON.stringify(ok));
+  const html = await (await fetch(`http://127.0.0.1:3100/doacoes/${ok.d.doacao_id}/comprovante`, {
+    headers: { Authorization: 'Bearer ' + token } })).text();
+  assert.match(html, /CNPJ: 12\.ABC\.345\/01DE-35/);
+  assert.match(html, /CNPJ: 00\.000\.004\/0001-70/);
+});
+
+test('Termos v2: cita a Lei 15.224/2025, guarda a v1 e o painel avisa que as equivalências são simuladas', async () => {
+  const atual = await (await fetch('http://127.0.0.1:3100/termos.html')).text();
+  assert.match(atual, /Versão <b>2026-10-v2<\/b>/);
+  assert.match(atual, /Lei nº 15\.224\/2025/);
+  assert.match(atual, /revogou a Lei nº 14\.016\/2020/);
+  assert.match(atual, /não concede o Selo Doador de Alimentos/);
+  const v1 = await fetch('http://127.0.0.1:3100/termos-2026-10-v1.html');
+  assert.equal(v1.status, 200);
+  assert.match(await v1.text(), /Versão <b>2026-10-v1<\/b>/);
+  // Contas do seed mantêm a versão que aceitaram.
+  const seed = await db.query(`SELECT DISTINCT termos_versao FROM usuarios WHERE email LIKE '%@demo.com'`);
+  assert.deepEqual(seed.rows.map((x) => x.termos_versao), ['2026-10-v1']);
+  const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  assert.equal(html.split('estimativas simuladas').length - 1, 2, 'aviso no painel global e em Meus números');
+});
+
 test('polimento: encerra a conexão de apoio com o banco de teste', () => db.end());

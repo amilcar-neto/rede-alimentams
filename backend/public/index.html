@@ -140,7 +140,7 @@
       <label for="cPerfil">Tipo de conta</label>
       <select id="cPerfil" onchange="alternarComprovante()"><option value="doador">Estabelecimento doador</option><option value="receptora">Entidade receptora (ONG)</option></select>
       <label for="cNome">Nome / Razão social</label><input id="cNome" maxlength="200">
-      <label for="cCnpj">CNPJ</label><input id="cCnpj" placeholder="00.000.000/0000-00" inputmode="numeric" oninput="mascararCnpj(this)">
+      <label for="cCnpj">CNPJ</label><input id="cCnpj" placeholder="00.000.000/0000-00" maxlength="18" autocapitalize="characters" oninput="mascararCnpj(this)">
       <label for="cEndereco">Endereço</label><input id="cEndereco" maxlength="250" placeholder="Rua, número e complemento" autocomplete="street-address">
       <label for="cBairro">Bairro</label><select id="cBairro"></select>
       <label for="cResponsavel">Responsável</label><input id="cResponsavel" maxlength="200" autocomplete="name">
@@ -161,7 +161,7 @@
   <!-- APLICAÇÃO -->
   <section id="telaApp" class="oculto">
     <div class="indicadores" id="indicadores"></div>
-    <p class="nota">* Fatores de conversão (2 refeições, 2,5 kg CO₂e e 350 L de água por kg) usados apenas para fins de demonstração.</p>
+    <p class="nota" id="notaSimulacao">* O valor medido é o kg entregue. Refeições, CO₂e e água são <b>estimativas simuladas</b> (2 refeições, 2,5 kg CO₂e e 350 L por kg), sem metodologia validada: não representam impacto ambiental comprovado.</p>
     <nav class="abas" id="abas"></nav>
     <div id="conteudo"></div>
   </section>
@@ -191,12 +191,13 @@ async function api(metodo, url, corpo) {
 }
 
 // ---------- Autenticação ----------
+// Aceita o CNPJ numérico e o alfanumérico (letras viram maiúsculas); pontuação é refeita pela máscara.
 function mascararCnpj(input) {
-  input.value = input.value.replace(/\D/g, '').slice(0, 14)
-    .replace(/^(\d{2})(\d)/, '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2')
-    .replace(/(\d{4})(\d)/, '$1-$2');
+  input.value = input.value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 14)
+    .replace(/^([0-9A-Z]{2})([0-9A-Z])/, '$1.$2')
+    .replace(/^([0-9A-Z]{2})\.([0-9A-Z]{3})([0-9A-Z])/, '$1.$2.$3')
+    .replace(/\.([0-9A-Z]{3})([0-9A-Z])/, '.$1/$2')
+    .replace(/([0-9A-Z]{4})([0-9A-Z])/, '$1-$2');
 }
 
 // (67) 99999-9999 ou (67) 3333-0001; aceita colar com +55.
@@ -334,7 +335,7 @@ function htmlIndicadores(i, { entidades = ['entidades beneficiadas', i.entidades
   const f = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const situacao = (atingida) => (atingida === null ? 'sem dados ainda' : atingida ? 'meta atingida' : 'meta não atingida');
   return `
-    <div class="ind" style="background:var(--verde)"><b>${f(i.kg)}</b><span>kg salvos do descarte</span></div>
+    <div class="ind" style="background:var(--verde)"><b>${f(i.kg)}</b><span>kg entregues em doações</span></div>
     <div class="ind" style="background:var(--azul)"><b>${f(i.refeicoes)}</b><span>refeições complementadas</span></div>
     <div class="ind" style="background:var(--laranja)"><b>${f(i.co2)}</b><span>kg de CO₂e evitados</span></div>
     <div class="ind" style="background:var(--teal)"><b>${f(i.agua)}</b><span>litros de água evitados</span></div>
@@ -354,7 +355,7 @@ async function carregarIndicadores() {
 
 const dataHoraBR = (iso) => new Date(iso).toLocaleString('pt-BR', {
   timeZone: 'America/Campo_Grande', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-const formatarCnpj = (d) => String(d ?? '').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+const formatarCnpj = (d) => String(d ?? '').replace(/^([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})(\d{2})$/, '$1.$2.$3/$4-$5');
 const formatarTelefone = (d) => String(d ?? '').replace(/^(\d{2})(\d{4,5})(\d{4})$/, '($1) $2-$3');
 const SITUACAO = { aprovado: 'Aprovado', pendente: 'Pendente de análise', rejeitado: 'Rejeitado' };
 
@@ -377,7 +378,7 @@ async function telaNumeros() {
     <h2 class="secao">Meus números</h2>
     <div class="indicadores">${htmlIndicadores(m, {
       doacoes: true, entidades: receptora ? ['doadores atendidos', m.doadores] : ['entidades beneficiadas', m.entidades] })}</div>
-    <p class="nota">Considera apenas as doações e os lotes da sua conta. TMR: média do tempo entre a publicação e a reserva; TEC: lotes entregues ÷ (entregues + expirados).</p>
+    <p class="nota">Considera apenas as doações e os lotes da sua conta. TMR: média do tempo entre a publicação e a reserva; TEC: lotes entregues ÷ (entregues + expirados). Refeições, CO₂e e água são <b>estimativas simuladas</b> a partir do kg entregue (2 refeições, 2,5 kg CO₂e e 350 L por kg), sem metodologia validada.</p>
     <h2 class="secao">Meu cadastro</h2>
     <div class="painel"><div class="campos">
       ${campo('Nome / Razão social', p.nome)}${campo('CNPJ', formatarCnpj(p.cnpj))}${campo('Endereço', p.endereco)}

@@ -44,18 +44,21 @@ function senha(valor, minimo = 6) {
   return valor;
 }
 
+// CNPJ numérico ou alfanumérico (Receita Federal, emitido desde 31/07/2026): 12 caracteres [0-9A-Z] seguidos de
+// 2 dígitos verificadores numéricos. Cada caractere vale (código ASCII − 48): 0–9 → 0–9 e A–Z → 17–42; pesos e
+// módulo 11 iguais aos do CNPJ numérico, que continua válido. Letras minúsculas são aceitas e guardadas em maiúsculas.
 function cnpj(valor) {
-  const entrada = texto(valor, 'CNPJ', 18);
-  if (!/^(?:\d{14}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})$/.test(entrada)) falhar('CNPJ inválido.');
-  const digitos = entrada.replace(/\D/g, '');
-  if (/^(\d)\1{13}$/.test(digitos)) falhar('CNPJ inválido.');
+  const entrada = texto(valor, 'CNPJ', 18).toUpperCase();
+  if (!/^(?:[0-9A-Z]{12}\d{2}|[0-9A-Z]{2}\.[0-9A-Z]{3}\.[0-9A-Z]{3}\/[0-9A-Z]{4}-\d{2})$/.test(entrada)) falhar('CNPJ inválido.');
+  const caracteres = entrada.replace(/[./-]/g, '');
+  if (/^(.)\1{13}$/.test(caracteres)) falhar('CNPJ inválido.');
   for (const tamanho of [12, 13]) {
     let soma = 0;
-    for (let i = 0; i < tamanho; i++) soma += Number(digitos[i]) * ((tamanho - 1 - i) % 8 + 2);
+    for (let i = 0; i < tamanho; i++) soma += (caracteres.charCodeAt(i) - 48) * ((tamanho - 1 - i) % 8 + 2);
     const resto = soma % 11;
-    if (Number(digitos[tamanho]) !== (resto < 2 ? 0 : 11 - resto)) falhar('CNPJ inválido.');
+    if (Number(caracteres[tamanho]) !== (resto < 2 ? 0 : 11 - resto)) falhar('CNPJ inválido.');
   }
-  return digitos;
+  return caracteres;
 }
 
 const CATEGORIAS = ['Hortifrúti', 'Panificados', 'Laticínios', 'Refeições prontas', 'Não perecíveis'];

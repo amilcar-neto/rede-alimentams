@@ -14,11 +14,11 @@ As diferenças em relação ao que a Etapa 4 descreve são de três tipos:
 - **Itens deixados de fora:** painel administrativo com aprovação de cadastros, raio configurável, PWA offline, notificação por push ou e-mail e quantidade em unidades.
 - **Adaptações:**
   - o comprovante é "assinado" por hash SHA-256 verificável, não por certificado ICP-Brasil;
-  - a validação de CNPJ confere os dígitos verificadores, sem consultar a Receita;
+  - a validação de CNPJ confere os dígitos verificadores (formatos numérico e alfanumérico), sem consultar a Receita;
   - a localização é a do bairro escolhido, sem geocodificação do endereço digitado.
 
 Evidências:
-- `npm test`: 175 testes automatizados;
+- `npm test`: 178 testes automatizados;
 - `docs/testes/e2e-api.mjs`: 55 verificações de ponta a ponta;
 - `docs/testes/resultado-carga.md`: carga com 20 e com 200 requisições simultâneas.
 
@@ -28,9 +28,9 @@ O mesmo `docker compose` foi validado do zero, a partir de uma cópia limpa do r
 
 | Promessa | Situação | Observação |
 |---|---|---|
-| Doador: cadastro e perfil | ✅ | CNPJ com dígito verificador, endereço, responsável, telefone e aceite do termo/política (data e versão gravadas). |
+| Doador: cadastro e perfil | ✅ | CNPJ numérico ou alfanumérico com dígito verificador, endereço, responsável, telefone e aceite do termo/política (data e versão gravadas). |
 | Doador: publicar lote com tipo, quantidade, validade, foto e horário de retirada | 🟡 | Tudo presente, mas quantidade só em kg (sem unidades). Foto opcional, reduzida no navegador, até 400 KB. |
-| Doador: comprovante digital e histórico (Selo Doador de Alimentos) | ✅ | Comprovante imprimível com hash SHA-256 e página pública `/verificar/:hash`; histórico e "Meus números". Relação com o Selo e a lei citada: [VERIFICAR]. |
+| Doador: comprovante digital e histórico (Selo Doador de Alimentos) | ✅ | Comprovante imprimível com hash SHA-256 e página pública `/verificar/:hash`; histórico e "Meus números". O comprovante não concede o Selo Doador de Alimentos, atribuído pelo poder público (Lei 15.224/2025). |
 | Doador: cancelar lote publicado | ✅ | Não estava na Etapa 4; acrescentado. A ONG com reserva recebe aviso urgente. |
 | Receptora: interface para celular | 🟡 | Layout responsivo; não é PWA instalável. |
 | Receptora: raio configurável | 🟡 | Raio fixo de 10 km (`RAIO_METROS`). |
@@ -38,7 +38,7 @@ O mesmo `docker compose` foi validado do zero, a partir de uma cópia limpa do r
 | Receptora: reserva e agendamento de coleta | ✅ | Reserva atômica (só a primeira ONG vence) com janela de retirada de até 2 h. A ONG pode desistir; o lote volta na hora para as outras. |
 | Logístico: distância via PostGIS, prioridade por validade e proximidade | ✅ | `ST_DWithin`/`ST_Distance`; lista ordenada por validade e depois por distância; aviso "urgente" para validade de hoje ou amanhã. |
 | Logístico: raio expansível para lotes volumosos | ❌ | Melhoria futura. |
-| Gestão: painel de kg, refeições, CO₂e e água | 🟡 | Funciona; os fatores (2 refeições, 2,5 kg CO₂e e 350 L por kg) são demonstrativos [VERIFICAR fonte]. |
+| Gestão: painel de kg, refeições, CO₂e e água | 🟡 | O kg entregue é medido; refeições, CO₂e e água são estimativas simuladas (2 refeições, 2,5 kg CO₂e e 350 L por kg) sem metodologia validada, com aviso nas duas telas de indicadores. |
 | Gestão: painel administrativo e relatório auditável | 🟡 | Sem perfil administrador. A auditoria existe no banco: doações imutáveis (gatilho), histórico de eventos de cada lote e comprovantes verificáveis. Sem exportação CSV. |
 
 ## 3. Stack (seção 2.1)
@@ -60,14 +60,14 @@ Motivo da troca: prazo. Um único arquivo de front sem etapa de build é mais si
 | Senhas com bcrypt | ✅ | Custo 10. |
 | HTTPS / TLS 1.3 | ❌ | Execução local em HTTP. A configuração com HTTPS está pronta (Caddy), mas não foi usada. |
 | Logs imutáveis de cada doação | ✅ | Gatilho no banco impede UPDATE/DELETE em `doacoes`; eventos de cada lote em `eventos_lote`. |
-| Termo de responsabilidade / LGPD | 🟡 | Aceite obrigatório no cadastro; texto em `termos.html` sem revisão jurídica, citações legais [VERIFICAR]. |
+| Termo de responsabilidade / LGPD | 🟡 | Aceite obrigatório com data e versão; termos v2 citam a Lei 15.224/2025 (que revogou a 14.016/2020) e a LGPD, conferidas em fonte oficial. Sem revisão jurídica; controlador, contato e retenção dependem do grupo. |
 | Proteções adicionais | ✅ | Não estavam na Etapa 4: 5 códigos de retirada errados bloqueiam o lote por 15 min; limite de tentativas de login; SQL parametrizado; HTML escapado; anexos validados pelo conteúdo do arquivo. |
 
 ## 5. Fluxos (seção 4)
 
 | Fluxo | Situação | Observação |
 |---|---|---|
-| 1. Cadastro e validação | 🟡 | CNPJ só por dígito verificador (sem consulta à Receita); a ONG anexa o comprovante (PDF/JPEG/PNG até 1 MB); sem aprovação manual, o cadastro já entra aprovado. |
+| 1. Cadastro e validação | 🟡 | CNPJ numérico ou alfanumérico só por dígito verificador (sem consulta à Receita); a ONG anexa o comprovante (PDF/JPEG/PNG até 1 MB); sem aprovação manual, o cadastro já entra aprovado. |
 | 2. Publicação | ✅ | Categoria, kg, validade, horário limite e foto. Validade de hoje é aceita (a Etapa 4 diz "posterior ao momento atual"). |
 | 3. Notificação, geolocalização e reserva | 🟡 | Todas as ONGs no raio de 10 km são avisadas ao vivo (WebSocket); sem push/e-mail. A primeira ONG que reservar fica com o lote. |
 | 4. Agendamento, retirada e validação | ✅ | Janela de retirada, código de 6 dígitos e QR Code. O doador lê o QR com a câmera do celular, que abre a confirmação já preenchida, e confere o checklist sanitário. |
@@ -100,7 +100,7 @@ Motivo da troca: prazo. Um único arquivo de front sem etapa de build é mais si
 - **Ciclo de vida sem processo agendado:** expiração e liberação de reservas acontecem na próxima consulta à API, não num horário exato.
 - **Limite de login em memória:** zera ao reiniciar o servidor.
 - **Contas de demonstração com senha conhecida** (`123456`), adequadas só para a demonstração.
-- **Textos legais sem revisão jurídica.** Fatores ambientais demonstrativos.
+- **Textos legais sem revisão jurídica.** Equivalências ambientais simuladas, sem metodologia validada.
 - **Sem itens extras:** administrador (X1), raio configurável (X2) e PWA (X3).
 
 ## 9. Como conferir

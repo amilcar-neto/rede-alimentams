@@ -108,12 +108,12 @@ function registrarFalhaLogin(chaves) {
   }
 }
 
-// Fatores de conversão do painel (mesmos do protótipo, apenas demonstrativos)
+// Fatores de conversão do painel: parâmetros internos de simulação, sem metodologia validada (a tela avisa).
 const FATORES = { refeicoes: 2, co2: 2.5, agua: 350 };
 // Metas do painel: TMR (tempo médio de reserva) abaixo de 90 min; TEC (taxa de entrega concluída) acima de 92%.
 const METAS = { tmr_minutos: 90, tec_percentual: 92 };
 // Versão do Termo de Responsabilidade e da Política de Privacidade (backend/public/termos.html) aceita no cadastro.
-const TERMOS_VERSAO = '2026-10-v1';
+const TERMOS_VERSAO = '2026-10-v2'; // v2: Lei 15.224/2025 (v1 guardada em public/termos-2026-10-v1.html)
 
 const rota = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
