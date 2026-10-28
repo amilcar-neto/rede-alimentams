@@ -28,6 +28,14 @@ Ferramenta: claude, 28/10/2026, pedido direto do usuário ("quero o código redo
 - TEC ignora cancelados: retirar a oferta não é falha de coleta.
 - Aviso ao doador quando a ONG desiste não é urgente; aviso à ONG quando o doador cancela é urgente (ela pode estar a caminho).
 
+## Docker local no lugar do VPS (decisão do usuário, 28/10)
+
+- [x] `docker-compose.yml`: banco só em 127.0.0.1:5432; `BASE_URL` opcional repassada ao app para o QR do celular.
+- [x] `backend/Dockerfile`: `node:24-alpine` (Node 20 sem suporte desde 04/2026; testes rodam em 24) e `npm ci` com `package-lock.json`.
+- [x] README/ROTEIRO_DEMO: recriar banco antes da demo, IP da rede, firewall, hotspot. DEPLOY.md marcado como fora do escopo.
+- [x] `docker compose config`: válido.
+- [x] Com autorização explícita do usuário: `docker compose down -v` (volume antigo com schema anterior removido) e `docker compose up -d --build`. App em Node v24.22.1, `/saude` → `{"ok":true,"banco":true}`, fumaça `docs/testes/e2e-api.mjs` contra o container: **55/55**. O banco ficou com dados da fumaça: recriar antes do ensaio.
+
 ## Próximo passo
 
 Recriar o banco de demonstração (schema mudou), refazer o ensaio visual e então tirar os prints definitivos.

@@ -1,5 +1,9 @@
 # Implantação em VPS (genérica)
 
+> **Fora do escopo da entrega (decisão do grupo em 28/10/2026):** a apresentação roda localmente com
+> `docker compose` (ver README, "Com Docker"). Este guia e `docker-compose.prod.yml`/`deploy/Caddyfile`
+> ficam como referência para uma implantação futura e não foram executados.
+
 Guia para o grupo subir a Rede AlimentaMS em um VPS Linux com Docker. Os arquivos
 são genéricos: nenhum domínio, IP ou segredo real fica no repositório. Esta
 versão foi preparada e validada **localmente** (testes automatizados e leitura dos

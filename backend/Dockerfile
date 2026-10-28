@@ -1,7 +1,8 @@
-FROM node:20-alpine
+FROM node:24-alpine
 WORKDIR /app
-COPY package.json ./
-RUN npm install --omit=dev
+# package-lock.json fixa as versões: o build instala exatamente o que os testes usaram.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
 COPY src ./src
 COPY public ./public
 EXPOSE 3000

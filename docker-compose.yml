@@ -6,7 +6,8 @@ services:
       POSTGRES_PASSWORD: alimentams
       POSTGRES_DB: alimentams
     ports:
-      - "5432:5432"
+      # Só o próprio notebook acessa o banco (psql/pgAdmin); a rede Wi-Fi da apresentação não.
+      - "127.0.0.1:5432:5432"
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
       - pgdata:/var/lib/postgresql/data
@@ -22,7 +23,11 @@ services:
       DATABASE_URL: postgres://alimentams:alimentams@db:5432/alimentams
       JWT_SECRET: troque-este-segredo
       PORT: 3000
+      # Opcional: endereço que o celular usa para abrir o app (ex.: http://192.168.0.10:3000).
+      # Vazio = o QR usa o mesmo endereço pelo qual a ONG abriu o app. Ver docs/ROTEIRO_DEMO.md.
+      BASE_URL: ${BASE_URL:-}
     ports:
+      # Aberta na rede local para o celular do doador ler o QR e abrir o app.
       - "3000:3000"
     depends_on:
       db:

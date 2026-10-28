@@ -42,18 +42,20 @@ Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXE
 
 ## Como rodar
 
-### Com Docker
-Pré-requisito: Docker Desktop (ou Docker + Compose no Linux).
+### Com Docker (forma usada na apresentação)
+Pré-requisito: Docker Desktop (ou Docker + Compose no Linux). A apresentação roda no notebook do grupo com este compose; o VPS (DEPLOY) ficou fora do escopo.
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
-Abra http://localhost:3000
+Abra http://localhost:3000. O banco só aceita conexões do próprio notebook (127.0.0.1:5432); o app (porta 3000) fica aberto na rede local para o celular.
 
-Somente para um ambiente de demonstração descartável: o comando abaixo apaga o volume e todos os dados. Bancos com dados a preservar exigem backup e atualização controlada conforme DEPLOY; reconstruir contêiner não aplica schema em volume existente.
+**Antes de cada ensaio/apresentação, recrie o banco.** O `init.sql` só roda com o volume vazio, e o seed usa horários relativos à criação do banco (a reserva do seed expira ~25 min depois). O comando abaixo apaga o volume e todos os dados da demonstração:
 ```bash
-docker compose down -v && docker compose up --build
+docker compose down -v && docker compose up -d --build
 ```
+
+**Celular lendo o QR:** no notebook, abra o app pelo IP da rede (ex.: `http://192.168.0.10:3000`, veja com `ipconfig`) ou suba com `BASE_URL=http://192.168.0.10:3000 docker compose up -d --build`. Se a ONG abrir por `localhost`, o QR leva `localhost`, que no celular aponta para o próprio celular. Libere a porta 3000 no Firewall do Windows (rede privada). Redes de faculdade costumam isolar os aparelhos entre si: se o celular não abrir o endereço, use o roteador do próprio celular (hotspot) para o notebook e o celular.
 
 ### Local (sem Docker para o app)
 Requer Node.js e PostgreSQL com PostGIS. Crie o banco, carregue `db/init.sql` e inicie:
