@@ -5,12 +5,18 @@ const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const validar = require('./validacao');
+
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET?.trim()) {
+  throw new Error('JWT_SECRET é obrigatório em produção.');
+}
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+pool.on('error', (erro) => console.error('Erro inesperado em conexão ociosa do banco.', erro));
 const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento';
 const RAIO_METROS = 10000; // Fluxo 3: entidades num raio de até 10 km
 const HOJE = "(now() AT TIME ZONE 'America/Campo_Grande')::date";
@@ -31,6 +37,7 @@ const FATORES = { refeicoes: 2, co2: 2.5, agua: 350 };
 
 const rota = (fn) => (req, res) =>
   fn(req, res).catch((e) => {
+    if (e instanceof validar.ErroValidacao) return res.status(400).json({ erro: e.message });
     console.error(e);
     res.status(500).json({ erro: 'Erro interno do servidor.' });
   });
@@ -59,12 +66,14 @@ const gerarToken = (u) =>
 app.get('/bairros', (req, res) => res.json(Object.keys(BAIRROS)));
 
 app.post('/auth/register', rota(async (req, res) => {
-  const { nome, email, senha, perfil, cnpj, bairro } = req.body;
-  if (!nome || !email || !senha || !bairro) return res.status(400).json({ erro: 'Preencha nome, e-mail, senha e bairro.' });
-  if (!['doador', 'receptora'].includes(perfil)) return res.status(400).json({ erro: 'Perfil inválido.' });
-  if (senha.length < 6) return res.status(400).json({ erro: 'A senha deve ter ao menos 6 caracteres.' });
+  const b = validar.corpo(req.body, ['nome', 'email', 'senha', 'perfil', 'cnpj', 'bairro']);
+  const nome = validar.texto(b.nome, 'Nome', 200);
+  const email = validar.email(b.email);
+  const senha = validar.senha(b.senha);
+  const perfil = validar.opcao(b.perfil, 'Perfil', ['doador', 'receptora']);
+  const cnpj = validar.cnpj(b.cnpj);
+  const bairro = validar.opcao(b.bairro, 'Bairro', Object.keys(BAIRROS));
   const coord = BAIRROS[bairro];
-  if (!coord) return res.status(400).json({ erro: 'Bairro inválido.' });
 
   const hash = await bcrypt.hash(senha, 10);
   try {
@@ -72,7 +81,7 @@ app.post('/auth/register', rota(async (req, res) => {
       `INSERT INTO usuarios (nome, email, senha_hash, perfil, cnpj, bairro, localizacao)
        VALUES ($1,$2,$3,$4,$5,$6, ST_SetSRID(ST_MakePoint($7,$8),4326)::geography)
        RETURNING id, nome, perfil`,
-      [nome.trim(), email.trim().toLowerCase(), hash, perfil, cnpj || null, bairro, coord[0], coord[1]]
+      [nome, email, hash, perfil, cnpj, bairro, coord[0], coord[1]]
     );
     res.status(201).json({ token: gerarToken(r.rows[0]), usuario: r.rows[0] });
   } catch (e) {
@@ -82,12 +91,14 @@ app.post('/auth/register', rota(async (req, res) => {
 }));
 
 app.post('/auth/login', rota(async (req, res) => {
-  const { email, senha } = req.body;
-  const r = await pool.query('SELECT id, nome, perfil, senha_hash FROM usuarios WHERE email = $1', [
-    String(email || '').trim().toLowerCase(),
-  ]);
+  const b = validar.corpo(req.body, ['email', 'senha']);
+  if (b.email === undefined || b.senha === undefined)
+    return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+  const email = validar.email(b.email);
+  const senha = validar.senha(b.senha, 1);
+  const r = await pool.query('SELECT id, nome, perfil, senha_hash FROM usuarios WHERE email = $1', [email]);
   const u = r.rows[0];
-  if (!u || !(await bcrypt.compare(String(senha || ''), u.senha_hash)))
+  if (!u || !(await bcrypt.compare(senha, u.senha_hash)))
     return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
   res.json({ token: gerarToken(u), usuario: { id: u.id, nome: u.nome, perfil: u.perfil } });
 }));
@@ -126,19 +137,18 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
 
 // Publicar lote (somente doador). Regras de negócio validadas no servidor.
 app.post('/lotes', autenticar, exigirPerfil('doador'), rota(async (req, res) => {
-  const { alimento, categoria, quantidade_kg, validade } = req.body;
-  const qtd = Number(quantidade_kg);
-  if (!alimento || !categoria) return res.status(400).json({ erro: 'Informe o alimento e a categoria.' });
-  if (!Number.isFinite(qtd) || qtd <= 0) return res.status(400).json({ erro: 'Quantidade inválida: informe um valor maior que zero.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(validade)) || isNaN(new Date(validade + 'T00:00:00')))
-    return res.status(400).json({ erro: 'Data de validade inválida.' });
+  const b = validar.corpo(req.body, ['alimento', 'categoria', 'quantidade_kg', 'validade']);
+  const alimento = validar.texto(b.alimento, 'Alimento', 200);
+  const categoria = validar.opcao(b.categoria, 'Categoria', validar.CATEGORIAS);
+  const qtd = validar.quantidade(b.quantidade_kg);
+  const validade = validar.data(b.validade);
   const ok = await pool.query(`SELECT $1::date >= ${HOJE} AS ok`, [validade]);
   if (!ok.rows[0].ok) return res.status(400).json({ erro: 'Não é permitido publicar lote com data de validade vencida.' });
 
   const r = await pool.query(
     `INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade)
      VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-    [req.usuario.id, alimento.trim(), categoria, qtd, validade]
+    [req.usuario.id, alimento, categoria, qtd, validade]
   );
   res.status(201).json({ id: r.rows[0].id });
 }));
@@ -146,6 +156,8 @@ app.post('/lotes', autenticar, exigirPerfil('doador'), rota(async (req, res) => 
 // Reservar (somente receptora). Atômico: o UPDATE condicional garante que
 // apenas a primeira entidade consiga reservar o lote.
 app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
+  const id = validar.id(req.params.id);
+  validar.corpo(req.body, []);
   const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   const r = await pool.query(
     `UPDATE lotes l
@@ -155,7 +167,7 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
                      WHERE d.id = l.doador_id AND r.id = $2
                        AND ST_DWithin(d.localizacao, r.localizacao, $4))
       RETURNING l.id, l.codigo`,
-    [req.params.id, req.usuario.id, codigo, RAIO_METROS]
+    [id, req.usuario.id, codigo, RAIO_METROS]
   );
   if (!r.rows.length)
     return res.status(409).json({ erro: 'Este lote não está mais disponível para reserva.' });
@@ -164,7 +176,9 @@ app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async
 
 // Confirmar retirada (somente doador): valida o código e registra a doação.
 app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rota(async (req, res) => {
-  const codigo = String(req.body.codigo || '').trim();
+  const id = validar.id(req.params.id);
+  const b = validar.corpo(req.body, ['codigo']);
+  const codigo = validar.codigo(b.codigo);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -172,7 +186,7 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
       `UPDATE lotes SET status = 'entregue'
         WHERE id = $1 AND doador_id = $2 AND status = 'reservado' AND codigo = $3
         RETURNING id, doador_id, reservado_por, alimento, quantidade_kg, codigo`,
-      [req.params.id, req.usuario.id, codigo]
+      [id, req.usuario.id, codigo]
     );
     if (!r.rows.length) {
       await client.query('ROLLBACK');
@@ -225,6 +239,22 @@ app.get('/indicadores', autenticar, rota(async (req, res) => {
     agua: Math.round(kg * FATORES.agua),
   });
 }));
+
+// Falhas do parser não passam pelas rotas. Não expor o corpo recebido ou stack.
+app.use((erro, req, res, next) => {
+  if (erro instanceof URIError && erro.status === 400)
+    return res.status(400).json({ erro: 'URL inválida. Confira o identificador informado.' });
+  if (erro.type === 'entity.parse.failed')
+    return res.status(400).json({ erro: 'JSON malformado. Envie um objeto JSON válido.' });
+  if (erro.type === 'entity.too.large')
+    return res.status(413).json({ erro: 'O corpo da requisição excede o tamanho permitido.' });
+  if (erro.type === 'charset.unsupported' || erro.type === 'encoding.unsupported')
+    return res.status(415).json({ erro: 'Codificação da requisição não suportada.' });
+  if (erro.type === 'request.aborted' || erro.type === 'request.size.invalid')
+    return res.status(400).json({ erro: 'Corpo da requisição incompleto ou tamanho inválido.' });
+  console.error(erro);
+  res.status(500).json({ erro: 'Erro interno do servidor.' });
+});
 
 const PORTA = process.env.PORT || 3000;
 app.listen(PORTA, () => console.log(`Rede AlimentaMS rodando em http://localhost:${PORTA}`));
