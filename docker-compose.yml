@@ -1,21 +1,30 @@
+# Rede AlimentaMS — execução local: docker compose up -d --build  →  http://localhost:3000
+# Porta ocupada? PORTA=8080 docker compose up -d --build  →  http://localhost:8080
 services:
   db:
     image: postgis/postgis:16-3.4
+    # A imagem oficial do PostGIS só é publicada para amd64; em Mac com chip Apple o Docker Desktop
+    # a executa por emulação. Declarado para não depender de detecção automática.
+    platform: linux/amd64
     environment:
       POSTGRES_USER: alimentams
       POSTGRES_PASSWORD: alimentams
       POSTGRES_DB: alimentams
-    ports:
-      # Só o próprio notebook acessa o banco (psql/pgAdmin); a rede Wi-Fi da apresentação não.
-      - "127.0.0.1:5432:5432"
+    # Sem porta publicada: o app acessa o banco pela rede interna do Docker, e um PostgreSQL já
+    # instalado na máquina (porta 5432) não impede a subida. Para inspecionar:
+    #   docker compose exec db psql -U alimentams
     volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # init.sql (schema + dados de demonstração) só roda com o volume vazio, na primeira subida.
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U alimentams -d alimentams"]
+      # Via TCP: durante a carga do init.sql o servidor temporário só escuta no socket local,
+      # então o app só sobe depois que o banco definitivo está pronto.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U alimentams -d alimentams"]
       interval: 3s
       timeout: 3s
-      retries: 20
+      retries: 40
+      start_period: 30s
 
   app:
     build: ./backend
@@ -28,10 +37,11 @@ services:
       BASE_URL: ${BASE_URL:-}
     ports:
       # Aberta na rede local para o celular do doador ler o QR e abrir o app.
-      - "3000:3000"
+      - "${PORTA:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:

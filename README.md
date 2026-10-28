@@ -3,27 +3,17 @@
 Plataforma que conecta estabelecimentos doadores a entidades receptoras.
 Stack: Node.js + Express, PostgreSQL + PostGIS, JWT + bcrypt, Docker.
 
-## Continuar o desenvolvimento automaticamente
+## Como rodar (3 passos)
 
-No terminal, na raiz do projeto:
+Pré-requisito: **Docker Desktop** aberto (Windows/Mac) ou Docker + Compose (Linux). Primeira subida precisa de internet para baixar as imagens.
 
-```powershell
-.\agentes.cmd diagnostico
-.\agentes.cmd iniciar
-```
+1. Na pasta do projeto: `docker compose up -d --build` (a primeira vez leva de 1 a 3 minutos).
+2. Abra **http://localhost:3000**.
+3. Entre com uma conta de demonstração (botões na tela de login; senha `123456`): doador `comper@demo.com`, entidade `esperanca@demo.com`.
 
-Se faltar o banco na porta 5433, abra o Docker Desktop e execute
-`.\agentes.cmd banco`; depois repita o diagnóstico. Isso prepara um banco
-de testes separado do banco da aplicação.
-
-O controlador usa Codex até atingir o limite, depois Claude até o limite; com
-ambos limitados, espera uma hora e tenta Codex primeiro. Estado persiste entre
-execuções. Use `.\agentes.cmd status` e `.\agentes.cmd parar` em outro terminal.
-Não deixe agentes manuais editando a pasta ao mesmo tempo.
-
-O Claude está configurado no modo nativo sem pedidos de permissão, conforme
-escolha do usuário: isso dá acesso da conta Windows, não isolamento à pasta.
-Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXECUCAO_AUTOMATICA.md).
+Se a porta 3000 estiver ocupada: `PORTA=8080 docker compose up -d --build` (PowerShell: `$env:PORTA=8080; docker compose up -d --build`) e abra http://localhost:8080.
+Para encerrar: `docker compose down`. Para começar do zero com os dados de demonstração: `docker compose down -v` e suba de novo.
+Em Mac com chip Apple, o banco (imagem oficial do PostGIS, só amd64) roda por emulação e a primeira subida pode demorar mais.
 
 ## Funcionalidades
 - Cadastro e login (JWT + bcrypt) de doadores e entidades receptoras, com CNPJ validado por dígito verificador.
@@ -40,15 +30,15 @@ Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXE
 - A foto só é entregue ao doador dono e a quem pode ver o lote (`GET /lotes/:id/foto`, com token).
 - Fora desta versão: painel administrativo (aprovação de cadastros, coluna `situacao` reservada ao extra X1) e e-mail.
 
-## Como rodar
+## Detalhes de execução
 
-### Com Docker (forma usada na apresentação)
-Pré-requisito: Docker Desktop (ou Docker + Compose no Linux). A apresentação roda no notebook do grupo com este compose; o VPS (DEPLOY) ficou fora do escopo.
+### Com Docker (avaliação e apresentação)
+O professor roda o projeto com este compose e a apresentação usa o notebook do grupo com o mesmo compose; o VPS (DEPLOY) ficou fora do escopo.
 
 ```bash
 docker compose up -d --build
 ```
-Abra http://localhost:3000. O banco só aceita conexões do próprio notebook (127.0.0.1:5432); o app (porta 3000) fica aberto na rede local para o celular.
+Abra http://localhost:3000. O banco não publica porta (só o app o acessa, pela rede interna do Docker; para inspecionar: `docker compose exec db psql -U alimentams`); o app fica aberto na rede local para o celular.
 
 **Antes de cada ensaio/apresentação, recrie o banco.** O `init.sql` só roda com o volume vazio, e o seed usa horários relativos à criação do banco (a reserva do seed expira ~25 min depois). O comando abaixo apaga o volume e todos os dados da demonstração:
 ```bash
@@ -133,3 +123,25 @@ Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisi�
 | GET | /notificacoes | autenticado (apenas as próprias) |
 | PUT | /notificacoes/lidas, /notificacoes/:id/lida | autenticado (apenas as próprias) |
 | WS | /ws | JWT no primeiro frame |
+
+## Desenvolvimento com agentes (bastidores do projeto)
+
+No terminal, na raiz do projeto:
+
+```powershell
+.\agentes.cmd diagnostico
+.\agentes.cmd iniciar
+```
+
+Se faltar o banco na porta 5433, abra o Docker Desktop e execute
+`.\agentes.cmd banco`; depois repita o diagnóstico. Isso prepara um banco
+de testes separado do banco da aplicação.
+
+O controlador usa Codex até atingir o limite, depois Claude até o limite; com
+ambos limitados, espera uma hora e tenta Codex primeiro. Estado persiste entre
+execuções. Use `.\agentes.cmd status` e `.\agentes.cmd parar` em outro terminal.
+Não deixe agentes manuais editando a pasta ao mesmo tempo.
+
+O Claude está configurado no modo nativo sem pedidos de permissão, conforme
+escolha do usuário: isso dá acesso da conta Windows, não isolamento à pasta.
+Pré-requisitos, retomada, limites e testes em [Execução automática](docs/EXECUCAO_AUTOMATICA.md).
