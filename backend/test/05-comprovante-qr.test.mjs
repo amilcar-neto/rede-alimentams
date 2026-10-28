@@ -138,7 +138,7 @@ test('L04 regressão M1 por HTTP: Host excessivo → 400 JSON; encoder falha →
     delete process.env.BASE_URL;
     vm.runInNewContext(readFileSync(new URL('../src/server.js', import.meta.url), 'utf8'), {
       require: (nome) => nome === 'pg' ? { Pool } : nome === 'express' ? criarApp :
-        nome === './validacao' ? require('../src/validacao.js') : nome === './comprovante' ? modulo : require(nome),
+        nome === './validacao' ? require('../src/validacao.js') : nome === './comprovante' ? modulo : nome === './tempo-real' ? require('../src/tempo-real.js') : require(nome),
       __dirname: new URL('../src/', import.meta.url).pathname,
       process: { env: { NODE_ENV: 'test', JWT_SECRET: segredo } },
       console: { error: (e) => logs.push(e.message) },
@@ -306,7 +306,7 @@ test('L04 regressão M2 por HTTP: integridade inválida → 500 application/json
     vm.runInNewContext(readFileSync(new URL('../src/server.js', import.meta.url), 'utf8'), {
       require: (nome) => nome === 'pg' ? { Pool } : nome === 'express' ? criarApp :
         nome === './validacao' ? require('../src/validacao.js') :
-        nome === './comprovante' ? comprovantes : require(nome),
+        nome === './comprovante' ? comprovantes : nome === './tempo-real' ? require('../src/tempo-real.js') : require(nome),
       __dirname: new URL('../src/', import.meta.url).pathname,
       process: { env: { NODE_ENV: 'test', JWT_SECRET: 'segredo-ficticio-l04-m2' } },
       console: { error: (e) => logs.push(e.message) },

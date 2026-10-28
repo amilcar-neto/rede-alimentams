@@ -44,6 +44,21 @@ CREATE TABLE eventos_lote (
 );
 CREATE INDEX idx_eventos_lote ON eventos_lote (lote_id, id);
 
+-- Central de notificações (L05): uma linha por destinatário, gravada na mesma instrução da
+-- transição do lote. O WebSocket é só entrega adicional; sem ele a consulta HTTP continua valendo.
+-- A mensagem não contém código de retirada nem dados de cadastro das partes.
+CREATE TABLE notificacoes (
+  id          SERIAL PRIMARY KEY,
+  usuario_id  INT NOT NULL REFERENCES usuarios(id),
+  lote_id     INT NOT NULL REFERENCES lotes(id) ON DELETE CASCADE,
+  tipo        TEXT NOT NULL CHECK (tipo IN ('lote_publicado','lote_liberado','lote_reservado','retirada_confirmada')),
+  urgente     BOOLEAN NOT NULL DEFAULT false,
+  mensagem    TEXT NOT NULL,
+  lida_em     TIMESTAMPTZ,
+  criado_em   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_notificacoes_usuario ON notificacoes (usuario_id, id DESC);
+
 CREATE TABLE doacoes (
   id           SERIAL PRIMARY KEY,
   lote_id      INT NOT NULL UNIQUE REFERENCES lotes(id),

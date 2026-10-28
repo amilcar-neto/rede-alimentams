@@ -241,7 +241,7 @@ test('L01 erro em conexão ociosa tem listener e falha interna de consulta perma
   Object.assign(criarApp, express);
   vm.runInNewContext(readFileSync(new URL('../src/server.js', import.meta.url), 'utf8'), {
     require: (nome) => nome === 'pg' ? { Pool } : nome === 'express' ? criarApp :
-      nome === './validacao' ? validar : nome === './comprovante' ? require('../src/comprovante.js') : require(nome),
+      nome === './validacao' ? validar : nome === './comprovante' ? require('../src/comprovante.js') : nome === './tempo-real' ? require('../src/tempo-real.js') : require(nome),
     __dirname: new URL('../src/', import.meta.url).pathname,
     process: { env: { NODE_ENV: 'test', JWT_SECRET: 'segredo-sintetico-l01' } },
     console: { error: (...args) => logs.push(args) },

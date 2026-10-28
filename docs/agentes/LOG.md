@@ -149,3 +149,12 @@ Resultado final do complemento: 31 testes do controlador aprovados, 0 fail/todo/
 - Diagnóstico da base: `npm.cmd test` em backend/ retornou código **0**, **102 testes / 102 pass / 0 fail / 0 skipped / 0 todo / 0 cancelled**, **17805,9187 ms**. Runner recriou exclusivamente `alimentams_test` de `db/init.sql` e encerrou seus processos. Esses testes não comprovam o aceite L05, que segue pendente de implementação.
 - **Conferência visual humana PENDENTE.** Skill computer-use lida e tentativa atual `cua.getState()` retornou `browsers: []` com `The browser access host is unavailable`. Negativa histórica de Edge preservada, sem repetir/contornar acesso negado. Executor não oferece `run_in_background`; nenhum app manual em 3000 foi iniciado. Sem teste visual, print ou revisão humana. Roteiro exato no checklist L05; a pendência visual isolada não é o bloqueio.
 - Próximo passo: disponibilizar a dependência `ws` por canal autorizado ou resolver a permissão de instalação; então retomar checklist e implementar o lote inteiro, testar e submeter à revisão separada pelo controlador. Consumo e duração total não informados pelo cliente.
+
+## 28/10/2026 — L05 — implementação claude (retomada)
+
+- Executor único, sem subagentes; branch lote/L05. Sem commits/staging/troca de branch, sem .git/.agentes/controlador/plano/configurações, VPS, publicação ou dados reais. Modelo efetivo/esforço: `nao_verificado`.
+- Bloqueio anterior (EACCES em `npm install ws`) não se repetiu: instalação normal concluída (ws ^8.22.0). Implementado o lote inteiro; detalhes e decisões em [checklist L05](progresso/L05.md).
+- Testes: `npm.cmd test` em backend/ — **116 pass / 0 fail / 0 skipped / 0 todo / 0 cancelled**, código 0. 14 novos testes em `06-notificacoes.test.mjs` (WS real: raio, sem token/token inválido/expirado, expiração do JWT, IDOR, persistência sem WS, concorrência de reserva e liberação, front). Nos testes 02 e 05 só foi acrescentado o mapeamento do novo módulo nos harnesses VM; nenhuma asserção alterada.
+- Schema: `notificacoes` em db/init.sql; bancos existentes exigem atualização controlada (nada migrado).
+- Conferência visual: feita parcialmente no navegador (Claude in Chrome): WS ao vivo, toast urgente, contador e central. **Conferência visual humana PENDENTE** para o restante do roteiro (checklist L05). Um ajuste de CSS posterior não foi reconferido.
+- Próximo passo: controlador repete testes e chama revisão separada de autorização por destinatário antes de integrar.
