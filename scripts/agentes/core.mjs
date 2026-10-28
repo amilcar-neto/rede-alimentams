@@ -250,6 +250,6 @@ export function protectedFingerprint(root) {
       for (const file of fs.readdirSync(full).sort()) walk(path.join(rel, file));
     } else hash.update(rel).update(fs.readFileSync(full));
   };
-  for (const rel of ['AGENTS.md', 'CLAUDE.md', 'PLANO_AGENTES.md', '.gitignore', '.claude', 'scripts/agentes', 'agentes.cmd', 'docker-compose.test.yml', 'ANALISE_CONFORMIDADE.md']) walk(rel);
+  for (const rel of ['AGENTS.md', 'CLAUDE.md', 'PLANO_AGENTES.md', '.gitignore', '.claude', 'scripts/agentes', 'agentes.cmd', 'docker-compose.test.yml', 'docs/agentes/historico/ANALISE_CONFORMIDADE.md']) walk(rel);
   return hash.digest('hex');
 }

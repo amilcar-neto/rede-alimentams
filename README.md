@@ -35,7 +35,7 @@ O que foi entregue em relação à Etapa 4 (e o que ficou de fora): [docs/CONFOR
 ## Detalhes de execução
 
 ### Com Docker (avaliação e apresentação)
-O professor roda o projeto com este compose e a apresentação usa o notebook do grupo com o mesmo compose; o VPS (DEPLOY) ficou fora do escopo.
+O professor roda o projeto com este compose e a apresentação usa o notebook do grupo com o mesmo compose; a implantação em servidor ficou fora do escopo.
 
 ```bash
 docker compose up -d --build
@@ -58,7 +58,7 @@ npm install
 # DATABASE_URL aponta para o banco (descartável) já carregado com db/init.sql
 node src/server.js
 ```
-Porta padrão 3000 (`PORT` altera). Deploy em servidor: [docs/DEPLOY.md](docs/DEPLOY.md).
+Porta padrão 3000 (`PORT` altera).
 
 ### Testes
 ```bash
@@ -87,13 +87,7 @@ O seed cria:
 
 Os instantes são relativos ao momento da criação do banco; para reiniciar a demonstração, recrie apenas o banco descartável (comando acima). TMR/TEC refletem as definições da API, não garantia de metas: o histórico sintético reserva 3 h após publicar e começa com TMR acima de 90 min. Cadastros demo incluem contato fictício e aceite dos termos; nenhum comprovante de entidade é pré-carregado.
 
-## Roteiro de demonstração
-
-[Demo de 5–7 minutos](docs/ROTEIRO_DEMO.md): Cenário 1 com Comper publicando 50 kg de frutas, notificações para Esperança/Amambai, reserva, QR, checklist, comprovante e indicadores. Usar sessões independentes; abas do mesmo perfil compartilham login. No celular, localhost aponta para o próprio aparelho: o grupo deve conferir uma origem acessível e o destino do QR antes do ensaio.
-
-[Roteiro de prints](docs/ROTEIRO_PRINTS.md): conta, preparação, estado esperado e destino proposto no relatório para cada tela. Ensaio visual deste complemento, câmera física, capturas definitivas e verificações humanas estão **PENDENTES**; resultados automatizados não comprovam esses itens.
-
-### Carga local (fora do npm test)
+## Carga local (fora do npm test)
 
 Em `backend/`, com `TEST_DATABASE_URL` apontando para banco local exclusivo `alimentams_test` (ou sufixo permitido):
 
@@ -129,3 +123,23 @@ Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisi�
 | GET | /notificacoes | autenticado (apenas as próprias) |
 | PUT | /notificacoes/lidas, /notificacoes/:id/lida | autenticado (apenas as próprias) |
 | WS | /ws | JWT no primeiro frame |
+
+## Para o grupo (fica fora do pacote de entrega)
+
+Estes arquivos existem só no repositório do grupo; o zip do professor não os inclui.
+
+- [Roteiro de demonstração](docs/ROTEIRO_DEMO.md) (5–7 min, Cenário 1) e [roteiro de prints](docs/ROTEIRO_PRINTS.md) para o relatório.
+- [Implantação em servidor](docs/DEPLOY.md) com `docker-compose.prod.yml`, `deploy/Caddyfile` e `.env.example`: fora do escopo desta entrega, guardado como melhoria futura.
+- Como o projeto foi desenvolvido (automação com agentes, logs, revisões e checklists): [docs/agentes/LEIA-ME.md](docs/agentes/LEIA-ME.md). Registros antigos em `docs/agentes/historico/`.
+
+### Gerar o pacote do professor
+
+```bash
+node scripts/empacotar-entrega.mjs
+```
+
+Gera `entrega/rede-alimentams.zip` a partir do **último commit** (alterações não commitadas ficam de fora), sem os itens marcados `export-ignore` em `.gitattributes`. Commite antes de empacotar. A pasta `entrega/` não é versionada.
+
+### Compartilhar com o grupo
+
+Use o repositório Git (ou um zip da pasta **sem** `.agentes/`, `backend/node_modules/` e `entrega/`). `node_modules` é recriado com `npm install`; `.agentes/` são logs locais da automação.

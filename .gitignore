@@ -13,4 +13,5 @@ uploads/
 *.pem
 *.key
 *.pfx
-
+# Pacote gerado por scripts/empacotar-entrega.mjs
+entrega/

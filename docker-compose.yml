@@ -33,7 +33,7 @@ services:
       JWT_SECRET: troque-este-segredo
       PORT: 3000
       # Opcional: endereço que o celular usa para abrir o app (ex.: http://192.168.0.10:3000).
-      # Vazio = o QR usa o mesmo endereço pelo qual a ONG abriu o app. Ver docs/ROTEIRO_DEMO.md.
+      # Vazio = o QR usa o mesmo endereço pelo qual a ONG abriu o app. Ver README ("Celular lendo o QR").
       BASE_URL: ${BASE_URL:-}
     ports:
       # Aberta na rede local para o celular do doador ler o QR e abrir o app.

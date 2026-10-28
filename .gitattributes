@@ -1,18 +1,25 @@
-# Pacote de entrega: `git archive --format=zip -o rede-alimentams.zip HEAD`
-# Os itens abaixo ficam no repositório, mas fora do zip enviado ao professor
-# (automação dos agentes, logs de execução e a análise de 27/10 já substituída por docs/CONFORMIDADE.md).
+# Pacote do professor: node scripts/empacotar-entrega.mjs  (usa `git archive`)
+# Tudo abaixo fica no repositório do grupo, mas fora do zip de entrega.
+
+# Automação dos agentes e histórico de desenvolvimento
 .gitattributes export-ignore
 .claude/ export-ignore
 AGENTS.md export-ignore
 CLAUDE.md export-ignore
 PLANO_AGENTES.md export-ignore
-ANALISE_CONFORMIDADE.md export-ignore
 agentes.cmd export-ignore
-scripts/agentes/ export-ignore
+scripts/ export-ignore
 docs/agentes/ export-ignore
 docs/EXECUCAO_AUTOMATICA.md export-ignore
-docs/testes/EXECUCAO.md export-ignore
-docs/testes/L00-execucao.txt export-ignore
-docs/testes/L01-execucao.txt export-ignore
-docs/testes/PENDENCIAS_L01.md export-ignore
-docs/testes/controlador-retomada-claude.txt export-ignore
+
+# Implantação em servidor (fora do escopo desta entrega)
+docker-compose.prod.yml export-ignore
+deploy/ export-ignore
+.env.example export-ignore
+docs/DEPLOY.md export-ignore
+
+# Material interno do grupo e documentos da disciplina
+docs/ROTEIRO_DEMO.md export-ignore
+docs/ROTEIRO_PRINTS.md export-ignore
+docs/*.pdf export-ignore
+docs/*.docx export-ignore

@@ -50,7 +50,7 @@ O mesmo `docker compose` foi validado do zero, a partir de uma cópia limpa do r
 | Banco | PostgreSQL + PostGIS | PostgreSQL 16 + PostGIS 3.4 | ✅ |
 | Infraestrutura | Docker + Linux + Vercel/Render | Docker Compose (contêineres Linux), execução local | 🟡 |
 
-Motivo da troca: prazo. Um único arquivo de front sem etapa de build é mais simples de manter, testar e rodar no PC do avaliador. Arquivos para implantar em servidor (Caddy com HTTPS automático) existem em `docker-compose.prod.yml` e `docs/DEPLOY.md`, mas não foram usados.
+Motivo da troca: prazo. Um único arquivo de front sem etapa de build é mais simples de manter, testar e rodar no PC do avaliador. Arquivos para implantar em servidor (Caddy com HTTPS automático) foram preparados no repositório do grupo, mas não foram usados nesta entrega.
 
 ## 4. Segurança e conformidade (seção 3.2)
 
@@ -105,4 +105,4 @@ Motivo da troca: prazo. Um único arquivo de front sem etapa de build é mais si
 
 ## 9. Como conferir
 
-Veja o README ("Como rodar", 3 passos). Testes: `cd backend && npm test`, com o banco de testes de `docker-compose.test.yml`. Roteiro de demonstração: `docs/ROTEIRO_DEMO.md`.
+Veja o README ("Como rodar", 3 passos). Testes: `cd backend && npm test`, com o banco de testes de `docker-compose.test.yml`.
