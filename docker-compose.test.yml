@@ -1,0 +1,22 @@
+# Banco descartável de testes, separado do volume da aplicação.
+# Credenciais locais de demonstração; porta acessível só neste computador.
+name: alimentams-testes
+services:
+  test-db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: alimentams_test
+      POSTGRES_PASSWORD: alimentams_test_local
+      POSTGRES_DB: alimentams_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgtestdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alimentams_test -d alimentams_test"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+volumes:
+  pgtestdata:

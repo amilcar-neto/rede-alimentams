@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: alimentams
+      POSTGRES_PASSWORD: alimentams
+      POSTGRES_DB: alimentams
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alimentams -d alimentams"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgres://alimentams:alimentams@db:5432/alimentams
+      JWT_SECRET: troque-este-segredo
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

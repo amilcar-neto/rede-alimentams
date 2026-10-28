@@ -1,0 +1,25 @@
+{
+  "retryMinutes": 60,
+  "heartbeatMinutes": 60,
+  "idleTimeoutMinutes": 45,
+  "callTimeoutMinutes": 120,
+  "maxNoProgress": 3,
+  "maxFixRounds": 2,
+  "testTimeoutMinutes": 15,
+  "testDatabaseUrl": "postgres://alimentams_test:alimentams_test_local@127.0.0.1:5433/alimentams_test",
+  "codex": {
+    "command": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "medium",
+    "criticalEffort": "high"
+  },
+  "claude": {
+    "command": "claude",
+    "isolation": "native",
+    "permissionMode": "bypassPermissions",
+    "model": "sonnet",
+    "reviewModel": "opus",
+    "effort": "medium",
+    "criticalEffort": "high"
+  }
+}

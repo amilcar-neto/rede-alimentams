@@ -1,0 +1,13 @@
+[
+  { "id": "L00", "section": "L00", "scope": "Fundação mínima: regras já criadas, testes com banco exclusivo, pendências conhecidas e documentação de execução. Não criar outro controlador nem editar instruções existentes.", "critical": false },
+  { "id": "L01", "section": "L01", "scope": "Validações, robustez, CNPJ e correção das pendências conhecidas.", "critical": true },
+  { "id": "L07", "section": "L07", "scope": "Arquivos genéricos de deploy, saúde e documentação; sem acessar VPS.", "critical": true },
+  { "id": "L02", "section": "L02", "scope": "Ciclo de vida, janela, expiração e histórico.", "critical": true },
+  { "id": "L04", "section": "L04", "scope": "Comprovante, checklist sanitário, imutabilidade e QR.", "critical": true },
+  { "id": "L05", "section": "L05", "scope": "WebSocket e notificações com autorização por destinatário.", "critical": true },
+  { "id": "L08-nucleo", "section": "L08", "scope": "Somente seed compatível com funcionalidades existentes e README. L08 completo continua pendente.", "critical": false },
+  { "id": "L03", "section": "L03", "scope": "Foto autorizada e horário limite de retirada.", "critical": true },
+  { "id": "L06", "section": "L06", "scope": "Cadastro, termo, anexos e KPIs. Conteúdo legal incerto marcado VERIFICAR.", "critical": true },
+  { "id": "L08-complemento", "section": "L08", "scope": "Atualizar seed/README, roteiros e carga com resultados reais. Não acessar VPS; registrar verificações humanas pendentes.", "critical": false },
+  { "id": "FINAL", "section": "Revisão final", "scope": "Revisão final de baseline..HEAD, integração e consistência documental. Registrar REVISAO_FINAL.md, limitações e verificações humanas pendentes. Não inventar aprovação humana, prints, deploy ou entrega.", "critical": true }
+]
