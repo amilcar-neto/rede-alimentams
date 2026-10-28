@@ -519,10 +519,14 @@ Fontes institucionais e páginas oficiais consultadas em 28 out. 2026. O ano de 
 
 ## Apêndice — Como executar
 
-Pré-requisito: Docker Desktop.
+Pré-requisito: **Docker Desktop instalado e aberto** (Windows ou Mac) ou Docker com Compose (Linux). A primeira execução precisa de internet para baixar as imagens.
 
-1. Na pasta do projeto: `docker compose up -d --build`.
-2. Abrir http://localhost:3000.
-3. Entrar com as contas de demonstração (senha `123456`): doador `comper@demo.com`; entidade `esperanca@demo.com`.
+1. Descompacte `rede-alimentams.zip`. Será criada a pasta `rede-alimentams`.
+2. Abra um terminal **dentro da pasta `rede-alimentams`** (a que contém o arquivo `docker-compose.yml`) e execute `docker compose up -d --build`. A primeira vez leva de 1 a 3 minutos.
+3. Abra **http://localhost:3000** no navegador.
+4. Na tela de login, use os botões de demonstração ou entre com senha `123456`: doador `comper@demo.com`; entidade receptora `esperanca@demo.com`.
+5. Para encerrar: `docker compose down`. Para voltar aos dados iniciais de demonstração: `docker compose down -v` e repetir o passo 2.
 
-Testes: ver README ("Testes"). Análise da proposta comparada ao que foi entregue: `docs/CONFORMIDADE.md`.
+Se a porta 3000 estiver ocupada: no PowerShell, `$env:PORTA=8080; docker compose up -d --build`; no Linux/Mac, `PORTA=8080 docker compose up -d --build`; depois abra http://localhost:8080.
+
+O `README.md` da pasta traz mais detalhes, inclusive como rodar os testes automatizados. A comparação entre a proposta da Etapa 4 e o que foi entregue está em `docs/CONFORMIDADE.md`.
