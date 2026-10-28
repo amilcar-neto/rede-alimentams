@@ -45,6 +45,10 @@
   .grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
   .lote { background: var(--card); border-radius: 10px; padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-left: 4px solid var(--verde); }
   .lote.reservado { border-left-color: var(--azul); }
+  .lote.expirado { border-left-color: #9e9e9e; opacity: .8; }
+  .secao { margin: 18px 0 10px; font-size: 1rem; color: var(--suave); }
+  .janela { margin-top: 8px; }
+  .janela .linha2 { grid-template-columns: 1fr; gap: 0; }
   .lote .topo { display: flex; justify-content: space-between; gap: 8px; }
   .lote h3 { margin: 0; font-size: 1.05rem; }
   .qtd { color: var(--verde); font-weight: 700; font-size: 1.4rem; white-space: nowrap; }
@@ -137,7 +141,7 @@ async function api(metodo, url, corpo) {
   });
   const dados = await r.json().catch(() => ({}));
   if (r.status === 401 && token) { sair(); throw new Error(dados.erro || 'Sessão expirada.'); }
-  if (!r.ok) throw new Error(dados.erro || 'Erro inesperado.');
+  if (!r.ok) throw Object.assign(new Error(dados.erro || 'Erro inesperado.'), { status: r.status });
   return dados;
 }
 
@@ -156,6 +160,22 @@ function dataAmanha(agora = new Date()) {
   }).formatToParts(agora);
   const valor = (tipo) => partes.find((p) => p.type === tipo).value;
   const dia = new Date(`${valor('year')}-${valor('month')}-${valor('day')}T12:00:00Z`);
+  dia.setUTCDate(dia.getUTCDate() + 1);
+  return dia.toISOString().slice(0, 10);
+}
+
+// Data e hora de Campo Grande no formato AAAA-MM-DDTHH:MM (o mesmo aceito pela API).
+function agoraLocal(agora = new Date(), minutos = 0) {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Campo_Grande', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(agora.getTime() + minutos * 60000));
+  const valor = (tipo) => partes.find((p) => p.type === tipo).value;
+  return `${valor('year')}-${valor('month')}-${valor('day')}T${valor('hour')}:${valor('minute')}`;
+}
+
+function diaSeguinte(iso) {
+  const dia = new Date(`${iso}T12:00:00Z`);
   dia.setUTCDate(dia.getUTCDate() + 1);
   return dia.toISOString().slice(0, 10);
 }
@@ -234,50 +254,86 @@ async function carregarIndicadores() {
 }
 
 function tagValidade(dias) {
-  if (dias <= 0) return '<span class="tag t-hoje">vence hoje</span>';
+  if (dias < 0) return '<span class="tag t-hoje">vencido</span>';
+  if (dias === 0) return '<span class="tag t-hoje">vence hoje</span>';
   if (dias === 1) return '<span class="tag t-breve">vence amanhã</span>';
   if (dias <= 3) return `<span class="tag t-breve">vence em ${dias} dias</span>`;
   return `<span class="tag t-ok">válido ${dias} dias</span>`;
 }
 const dataBR = (iso) => iso.split('-').reverse().slice(0, 2).join('/');
 
+// "hh:mm–hh:mm" (com a data quando a janela não é de hoje).
+function textoJanela(l, agora = new Date()) {
+  const [d1, h1] = l.janela_inicio.split('T'), [d2, h2] = l.janela_fim.split('T');
+  const hoje = agoraLocal(agora).slice(0, 10);
+  if (d1 === d2) return `${d1 === hoje ? '' : dataBR(d1) + ' '}${h1}–${h2}`;
+  return `${dataBR(d1)} ${h1} – ${dataBR(d2)} ${h2}`;
+}
+
+function cartaoLote(l, doador) {
+  const reservado = l.status === 'reservado', expirado = l.status === 'expirado';
+  let rodape = '';
+  if (doador && expirado) {
+    rodape = '<div class="acao"><span class="tag t-hoje">expirado</span></div><div class="meta">O prazo de validade passou sem retirada.</div>';
+  } else if (doador && reservado) {
+    rodape = `<div class="meta"><b>${esc(l.reservado_por_nome)}</b> retira entre <b>${esc(textoJanela(l))}</b></div>
+      <div class="acao"><input id="cod${l.id}" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos" aria-label="Código de retirada">
+      <button class="azul" onclick="confirmar(${l.id})">Confirmar retirada</button></div>`;
+  } else if (doador) {
+    rodape = '<div class="acao"><span class="tag t-ok">disponível</span></div>';
+  } else if (reservado) {
+    rodape = `<div class="codigo">Código de retirada: <b>${esc(l.codigo)}</b></div>
+      <div class="acao"><span class="tag t-res">reservado por você</span></div>
+      <div class="meta">Retire entre <b>${esc(textoJanela(l))}</b> e apresente este código ao doador. Passada a janela (mais 30 min de tolerância), a reserva é liberada para outra entidade.</div>`;
+  } else {
+    rodape = `<div id="res${l.id}"><div class="acao">${tagValidade(l.dias)}<button onclick="abrirReserva(${l.id}, '${esc(l.validade)}')">Reservar retirada</button></div></div>`;
+  }
+  return `<article class="lote ${reservado ? 'reservado' : ''} ${expirado ? 'expirado' : ''}">
+    <div class="topo"><div><h3>${esc(l.alimento)}</h3>
+      <div class="meta">${doador ? esc(l.categoria) : esc(l.doador)}</div></div>
+      <div class="qtd">${Number(l.quantidade_kg)}<small style="font-size:.7rem;color:var(--suave)"> kg</small></div></div>
+    ${doador ? '' : `<div class="meta">Bairro: <b>${esc(l.bairro)}</b> · ${l.distancia_km} km de você</div>`}
+    <div class="meta">${esc(l.categoria)} · válido até <b>${dataBR(l.validade)}</b></div>
+    ${doador && !expirado ? tagValidade(l.dias) : ''}
+    ${rodape}</article>`;
+}
+
 async function telaLotes() {
   const lotes = await api('GET', '/lotes');
   const doador = usuario.perfil === 'doador';
-  if (!lotes.length) {
-    $('conteudo').innerHTML = `<div class="vazio">${doador ? 'Você não tem lotes em aberto. Use a aba "Publicar lote".' : 'Nenhum lote disponível num raio de 10 km agora.'}</div>`;
-    return;
-  }
-  $('conteudo').innerHTML = `<div id="aviso"></div><div class="grade">` + lotes.map((l) => {
-    const reservado = l.status === 'reservado';
-    let rodape = '';
-    if (doador && reservado) {
-      rodape = `<div class="meta">Reservado por <b>${esc(l.reservado_por_nome)}</b></div>
-        <div class="acao"><input id="cod${l.id}" inputmode="numeric" maxlength="6" placeholder="Código de 6 dígitos" aria-label="Código de retirada">
-        <button class="azul" onclick="confirmar(${l.id})">Confirmar retirada</button></div>`;
-    } else if (doador) {
-      rodape = '<div class="acao"><span class="tag t-ok">disponível</span></div>';
-    } else if (reservado) {
-      rodape = `<div class="codigo">Código de retirada: <b>${esc(l.codigo)}</b></div>
-        <div class="acao"><span class="tag t-res">reservado por você</span></div>
-        <div class="meta">Apresente este código ao doador na retirada.</div>`;
-    } else {
-      rodape = `<div class="acao">${tagValidade(l.dias)}<button onclick="reservar(${l.id})">Reservar retirada</button></div>`;
-    }
-    return `<article class="lote ${reservado ? 'reservado' : ''}">
-      <div class="topo"><div><h3>${esc(l.alimento)}</h3>
-        <div class="meta">${doador ? esc(l.categoria) : esc(l.doador)}</div></div>
-        <div class="qtd">${Number(l.quantidade_kg)}<small style="font-size:.7rem;color:var(--suave)"> kg</small></div></div>
-      ${doador ? '' : `<div class="meta">Bairro: <b>${esc(l.bairro)}</b> · ${l.distancia_km} km de você</div>`}
-      <div class="meta">${esc(l.categoria)} · válido até <b>${dataBR(l.validade)}</b></div>
-      ${doador ? tagValidade(l.dias) : ''}
-      ${rodape}</article>`;
-  }).join('') + `</div>`;
+  const ativos = lotes.filter((l) => l.status !== 'expirado'), expirados = lotes.filter((l) => l.status === 'expirado');
+  const vazio = doador ? 'Você não tem lotes ativos. Use a aba "Publicar lote".' : 'Nenhum lote disponível num raio de 10 km agora.';
+  const grade = (lista) => `<div class="grade">${lista.map((l) => cartaoLote(l, doador)).join('')}</div>`;
+  $('conteudo').innerHTML = '<div id="aviso"></div>' +
+    (doador ? '<h2 class="secao">Ativos</h2>' : '') +
+    (ativos.length ? grade(ativos) : `<div class="vazio">${vazio}</div>`) +
+    (expirados.length ? `<h2 class="secao">Expirados</h2>${grade(expirados)}` : '');
+}
+
+// Mostra a escolha da janela de retirada (máx. 2 h, até o fim do dia da validade).
+function abrirReserva(id, validade) {
+  const inicio = agoraLocal(), limite = `${diaSeguinte(validade)}T00:00`;
+  let fim = agoraLocal(new Date(), 60);
+  if (fim > limite) fim = limite;
+  $('res' + id).innerHTML = `<div class="janela">
+    <div id="erroRes${id}"></div>
+    <div class="linha2">
+      <div><label for="ji${id}">Retirar a partir de</label><input id="ji${id}" type="datetime-local" value="${inicio}" min="${inicio}" max="${limite}"></div>
+      <div><label for="jf${id}">Até</label><input id="jf${id}" type="datetime-local" value="${fim}" min="${inicio}" max="${limite}"></div>
+    </div>
+    <div class="meta">Janela de no máximo 2 horas, até o fim do dia da validade (horário de Campo Grande).</div>
+    <div class="acao"><button onclick="reservar(${id})">Confirmar reserva</button><button class="link" onclick="irPara('lotes')">Cancelar</button></div></div>`;
 }
 
 async function reservar(id) {
-  try { await api('PUT', `/lotes/${id}/reservar`); await irPara('lotes'); }
-  catch (e) { await irPara('lotes'); $('aviso').innerHTML = `<div class="msg erro">${esc(e.message)}</div>`; }
+  try {
+    await api('PUT', `/lotes/${id}/reservar`, { janela_inicio: $('ji' + id).value, janela_fim: $('jf' + id).value });
+    await irPara('lotes');
+  } catch (e) {
+    if (e.status === 401) return;
+    if (e.status !== 400) { await irPara('lotes'); $('aviso').innerHTML = `<div class="msg erro">${esc(e.message)}</div>`; }
+    else msg('erroRes' + id, e.message);
+  }
 }
 async function confirmar(id) {
   try {

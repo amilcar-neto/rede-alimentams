@@ -41,7 +41,16 @@ app.get('/saude', async (req, res) => {
 });
 const SEGREDO = process.env.JWT_SECRET || 'segredo-de-desenvolvimento';
 const RAIO_METROS = 10000; // Fluxo 3: entidades num raio de até 10 km
-const HOJE = "(now() AT TIME ZONE 'America/Campo_Grande')::date";
+const FUSO = "'America/Campo_Grande'";
+const HOJE = `(now() AT TIME ZONE ${FUSO})::date`;
+const JANELA_MAX_MINUTOS = 120;
+const INICIO_FOLGA_MINUTOS = 5; // o formulário pode ficar aberto alguns minutos antes de enviar
+const TOLERANCIA_MINUTOS = (() => {
+  const n = Number(process.env.TOLERANCIA_MINUTOS);
+  return Number.isInteger(n) && n >= 0 && n <= 1440 ? n : 30;
+})();
+// Horário local de Campo Grande, no mesmo formato aceito na entrada (AAAA-MM-DDTHH:MM).
+const LOCAL = (coluna) => `to_char(${coluna} AT TIME ZONE ${FUSO}, 'YYYY-MM-DD"T"HH24:MI')`;
 
 // Bairros disponíveis no cadastro (coordenadas aproximadas, [lng, lat])
 const BAIRROS = {
@@ -125,17 +134,54 @@ app.post('/auth/login', rota(async (req, res) => {
   res.json({ token: gerarToken(u), usuario: { id: u.id, nome: u.nome, perfil: u.perfil } });
 }));
 
+// ---------- Ciclo de vida (sem job: chamado no início das rotas de lotes) ----------
+// Cada passo é uma única instrução atômica; FOR UPDATE ordenado evita corrida e deadlock
+// entre chamadas simultâneas (a segunda reavalia as linhas já atualizadas e as ignora).
+async function atualizarStatus() {
+  // Lote vencido → expirado (o código deixa de valer; a reserva fica como histórico).
+  await pool.query(
+    `WITH vencidos AS (
+       SELECT id FROM lotes
+        WHERE status IN ('disponivel','reservado') AND validade < ${HOJE}
+        ORDER BY id FOR UPDATE
+     ), expirados AS (
+       UPDATE lotes l SET status = 'expirado', codigo = NULL
+         FROM vencidos v WHERE l.id = v.id RETURNING l.id
+     )
+     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'expirado', NULL FROM expirados`
+  );
+  // Janela encerrada há mais que a tolerância sem retirada → volta a disponível para a próxima ONG.
+  await pool.query(
+    `WITH atrasados AS (
+       SELECT id, reservado_por FROM lotes
+        WHERE status = 'reservado' AND janela_fim + make_interval(mins => $1) < now()
+        ORDER BY id FOR UPDATE
+     ), liberados AS (
+       UPDATE lotes l
+          SET status = 'disponivel', reservado_por = NULL, reservado_em = NULL, codigo = NULL,
+              janela_inicio = NULL, janela_fim = NULL
+         FROM atrasados a WHERE l.id = a.id RETURNING l.id, a.reservado_por
+     )
+     INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'liberado', reservado_por FROM liberados`,
+    [TOLERANCIA_MINUTOS]
+  );
+}
+
 // ---------- Lotes ----------
-// Doador: lista seus lotes em aberto. Receptora: lotes num raio de 10 km (PostGIS),
+// Doador: lista seus lotes ativos e os expirados. Receptora: lotes num raio de 10 km (PostGIS),
 // ordenados por urgência de validade e depois por distância, + lotes que ela reservou.
 app.get('/lotes', autenticar, rota(async (req, res) => {
+  await atualizarStatus();
   if (req.usuario.perfil === 'doador') {
     const r = await pool.query(
       `SELECT l.id, l.alimento, l.categoria, l.quantidade_kg, l.validade::text AS validade, l.status,
-              (l.validade - ${HOJE}) AS dias, r.nome AS reservado_por_nome
+              (l.validade - ${HOJE}) AS dias, r.nome AS reservado_por_nome,
+              ${LOCAL('l.janela_inicio')} AS janela_inicio, ${LOCAL('l.janela_fim')} AS janela_fim
          FROM lotes l LEFT JOIN usuarios r ON r.id = l.reservado_por
-        WHERE l.doador_id = $1 AND l.status IN ('disponivel','reservado')
-        ORDER BY l.validade, l.id`,
+        WHERE l.doador_id = $1 AND l.status IN ('disponivel','reservado','expirado')
+        ORDER BY (l.status = 'expirado'),
+                 CASE WHEN l.status = 'expirado' THEN l.validade END DESC,
+                 l.validade, l.id`,
       [req.usuario.id]
     );
     return res.json(r.rows);
@@ -144,7 +190,9 @@ app.get('/lotes', autenticar, rota(async (req, res) => {
     `SELECT l.id, l.alimento, l.categoria, l.quantidade_kg, l.validade::text AS validade, l.status,
             (l.validade - ${HOJE}) AS dias, d.nome AS doador, d.bairro,
             ROUND((ST_Distance(d.localizacao, r.localizacao) / 1000)::numeric, 1) AS distancia_km,
-            CASE WHEN l.reservado_por = $1 THEN l.codigo END AS codigo
+            CASE WHEN l.reservado_por = $1 THEN l.codigo END AS codigo,
+            CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_inicio')} END AS janela_inicio,
+            CASE WHEN l.reservado_por = $1 THEN ${LOCAL('l.janela_fim')} END AS janela_fim
        FROM lotes l
        JOIN usuarios d ON d.id = l.doador_id
        JOIN usuarios r ON r.id = $1
@@ -164,32 +212,74 @@ app.post('/lotes', autenticar, exigirPerfil('doador'), rota(async (req, res) => 
   const categoria = validar.opcao(b.categoria, 'Categoria', validar.CATEGORIAS);
   const qtd = validar.quantidade(b.quantidade_kg);
   const validade = validar.data(b.validade);
+  await atualizarStatus();
   const ok = await pool.query(`SELECT $1::date >= ${HOJE} AS ok`, [validade]);
   if (!ok.rows[0].ok) return res.status(400).json({ erro: 'Não é permitido publicar lote com data de validade vencida.' });
 
   const r = await pool.query(
-    `INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade)
-     VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    `WITH novo AS (
+       INSERT INTO lotes (doador_id, alimento, categoria, quantidade_kg, validade)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id
+     ), evento AS (
+       INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'publicado', $1 FROM novo
+     )
+     SELECT id FROM novo`,
     [req.usuario.id, alimento, categoria, qtd, validade]
   );
   res.status(201).json({ id: r.rows[0].id });
 }));
 
-// Reservar (somente receptora). Atômico: o UPDATE condicional garante que
-// apenas a primeira entidade consiga reservar o lote.
+// Reservar (somente receptora), escolhendo a janela de retirada (horário de Campo Grande):
+// começa de agora em diante (folga de 5 min), dura no máximo 2 h e termina até o fim do dia da validade.
+// Atômico: o UPDATE condicional garante que apenas a primeira entidade consiga reservar o lote.
 app.put('/lotes/:id/reservar', autenticar, exigirPerfil('receptora'), rota(async (req, res) => {
   const id = validar.id(req.params.id);
-  validar.corpo(req.body, []);
+  const b = validar.corpo(req.body, ['janela_inicio', 'janela_fim']);
+  if (b.janela_inicio === undefined || b.janela_fim === undefined)
+    throw new validar.ErroValidacao('Informe o início e o fim da janela de retirada.');
+  const textoInicio = validar.dataHora(b.janela_inicio, 'Início da janela');
+  const textoFim = validar.dataHora(b.janela_fim, 'Fim da janela');
+  await atualizarStatus();
+
+  const base = await pool.query(
+    `SELECT l.status, l.validade >= ${HOJE} AS vigente,
+            ($2::timestamp AT TIME ZONE ${FUSO}) AS inicio,
+            ($3::timestamp AT TIME ZONE ${FUSO}) AS fim,
+            now() AS agora,
+            ((l.validade + 1)::timestamp AT TIME ZONE ${FUSO}) AS limite
+       FROM lotes l WHERE l.id = $1`,
+    [id, textoInicio, textoFim]
+  );
+  const lote = base.rows[0];
+  if (!lote || lote.status !== 'disponivel' || !lote.vigente)
+    return res.status(409).json({ erro: 'Este lote não está mais disponível para reserva.' });
+  if (lote.inicio < lote.agora - INICIO_FOLGA_MINUTOS * 60000)
+    throw new validar.ErroValidacao('O início da janela de retirada não pode estar no passado.');
+  if (lote.fim <= lote.agora)
+    throw new validar.ErroValidacao('O fim da janela de retirada deve estar no futuro.');
+  if (lote.fim <= lote.inicio)
+    throw new validar.ErroValidacao('O fim da janela deve ser depois do início.');
+  if (lote.fim - lote.inicio > JANELA_MAX_MINUTOS * 60000)
+    throw new validar.ErroValidacao('A janela de retirada pode ter no máximo 2 horas.');
+  if (lote.fim > lote.limite)
+    throw new validar.ErroValidacao('A janela de retirada deve terminar até o fim do dia da validade do lote.');
+
   const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
   const r = await pool.query(
-    `UPDATE lotes l
-        SET status = 'reservado', reservado_por = $2, reservado_em = now(), codigo = $3
-      WHERE l.id = $1 AND l.status = 'disponivel' AND l.validade >= ${HOJE}
-        AND EXISTS (SELECT 1 FROM usuarios d, usuarios r
-                     WHERE d.id = l.doador_id AND r.id = $2
-                       AND ST_DWithin(d.localizacao, r.localizacao, $4))
-      RETURNING l.id, l.codigo`,
-    [id, req.usuario.id, codigo, RAIO_METROS]
+    `WITH reserva AS (
+       UPDATE lotes l
+          SET status = 'reservado', reservado_por = $2, reservado_em = now(), codigo = $3,
+              janela_inicio = $5, janela_fim = $6
+        WHERE l.id = $1 AND l.status = 'disponivel' AND l.validade >= ${HOJE}
+          AND EXISTS (SELECT 1 FROM usuarios d, usuarios r
+                       WHERE d.id = l.doador_id AND r.id = $2
+                         AND ST_DWithin(d.localizacao, r.localizacao, $4))
+        RETURNING l.id, l.codigo
+     ), evento AS (
+       INSERT INTO eventos_lote (lote_id, tipo, usuario_id) SELECT id, 'reservado', $2 FROM reserva
+     )
+     SELECT id, codigo FROM reserva`,
+    [id, req.usuario.id, codigo, RAIO_METROS, lote.inicio, lote.fim]
   );
   if (!r.rows.length)
     return res.status(409).json({ erro: 'Este lote não está mais disponível para reserva.' });
@@ -201,6 +291,7 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
   const id = validar.id(req.params.id);
   const b = validar.corpo(req.body, ['codigo']);
   const codigo = validar.codigo(b.codigo);
+  await atualizarStatus();
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -211,7 +302,14 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
       [id, req.usuario.id, codigo]
     );
     if (!r.rows.length) {
+      // Lote do próprio doador expirado ou com a reserva liberada: conflito de estado (409).
+      const atual = await client.query('SELECT status FROM lotes WHERE id = $1 AND doador_id = $2', [id, req.usuario.id]);
       await client.query('ROLLBACK');
+      const status = atual.rows[0]?.status;
+      if (status === 'expirado')
+        return res.status(409).json({ erro: 'Este lote expirou e não pode mais ter a retirada confirmada.' });
+      if (status === 'disponivel')
+        return res.status(409).json({ erro: 'Este lote não tem reserva ativa: a reserva foi liberada ou ainda não existe.' });
       return res.status(400).json({ erro: 'Código inválido ou lote não está reservado.' });
     }
     const l = r.rows[0];
@@ -219,6 +317,10 @@ app.put('/lotes/:id/confirmar-retirada', autenticar, exigirPerfil('doador'), rot
       `INSERT INTO doacoes (lote_id, doador_id, receptor_id, alimento, quantidade_kg, codigo)
        VALUES ($1,$2,$3,$4,$5,$6)`,
       [l.id, l.doador_id, l.reservado_por, l.alimento, l.quantidade_kg, l.codigo]
+    );
+    await client.query(
+      `INSERT INTO eventos_lote (lote_id, tipo, usuario_id) VALUES ($1,'entregue',$2)`,
+      [l.id, l.doador_id]
     );
     await client.query('COMMIT');
     res.json({ ok: true });

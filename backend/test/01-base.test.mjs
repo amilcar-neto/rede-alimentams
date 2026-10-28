@@ -1,5 +1,5 @@
 // Adaptado de docs/testes/e2e-api.mjs; verificações originais preservadas.
-import { call, login, ok, dia, hoje } from './helpers.mjs';
+import { call, login, ok, dia, hoje, janela } from './helpers.mjs';
 
 const comper = await login('comper@demo.com'), sabor = await login('sabor@demo.com');
 const esp = await login('esperanca@demo.com'), amb = await login('amambai@demo.com'), longe = await login('longe@demo.com');
@@ -19,13 +19,13 @@ const disp = le.filter((l) => l.status === 'disponivel');
 const ordenado = disp.every((l, i) => i === 0 || l.validade > disp[i - 1].validade || (l.validade === disp[i - 1].validade && Number(l.distancia_km) >= Number(disp[i - 1].distancia_km)));
 ok('C1 ordenação validade -> distância', ordenado, disp.map((l) => `${l.validade}/${l.distancia_km}`).join(' '));
 ok('Receptora longe (fora 10km) não vê lotes', (await call('GET', '/lotes', undefined, longe)).d.length === 0);
-ok('Receptora longe não consegue reservar', (await call('PUT', `/lotes/${id}/reservar`, undefined, longe)).s === 409);
+ok('Receptora longe não consegue reservar', (await call('PUT', `/lotes/${id}/reservar`, janela(dia(2)), longe)).s === 409);
 ok('Doador não pode reservar (RBAC)', (await call('PUT', `/lotes/${id}/reservar`, undefined, comper)).s === 403);
 ok('Receptora não pode publicar (RBAC)', (await call('POST', '/lotes', { alimento: 'x', categoria: 'y', quantidade_kg: 1, validade: dia(1) }, esp)).s === 403);
-r = await call('PUT', `/lotes/${id}/reservar`, undefined, esp);
+r = await call('PUT', `/lotes/${id}/reservar`, janela(dia(2)), esp);
 ok('C1 reservar gera código 6 dígitos', r.s === 200 && /^\d{6}$/.test(r.d.codigo), JSON.stringify(r.d));
 const codigo = r.d.codigo;
-ok('Segunda ONG não reserva lote já reservado', (await call('PUT', `/lotes/${id}/reservar`, undefined, amb)).s === 409);
+ok('Segunda ONG não reserva lote já reservado', (await call('PUT', `/lotes/${id}/reservar`, janela(dia(2)), amb)).s === 409);
 ok('ONG que não reservou não vê o código', !(await call('GET', '/lotes', undefined, amb)).d.some((l) => l.id === id));
 ok('Outro doador não confirma lote alheio', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo }, sabor)).s === 400);
 ok('Código errado rejeitado', (await call('PUT', `/lotes/${id}/confirmar-retirada`, { codigo: codigo === '000000' ? '111111' : '000000' }, comper)).s === 400);
@@ -73,7 +73,7 @@ r = await call('POST', '/lotes', { alimento: 'Carga', categoria: 'Panificados', 
 const idc = r.d.id; const t0 = Date.now();
 const reqs = [];
 for (let i = 0; i < 10; i++) reqs.push(call('GET', '/lotes', undefined, i % 2 ? esp : amb));
-for (let i = 0; i < 10; i++) reqs.push(call('PUT', `/lotes/${idc}/reservar`, undefined, i % 2 ? esp : amb));
+for (let i = 0; i < 10; i++) reqs.push(call('PUT', `/lotes/${idc}/reservar`, janela(dia(1)), i % 2 ? esp : amb));
 const out = await Promise.all(reqs); const ms = Date.now() - t0;
 const sucessos = out.slice(10).filter((x) => x.s === 200).length;
 ok('C3 20 req simultâneas sem erro 5xx', out.every((x) => x.s < 500), `${ms}ms`);
