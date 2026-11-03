@@ -8,7 +8,6 @@ Universidade Católica Dom Bosco (UCDB) · Tecnologia em Análise e Desenvolvime
 Desafio de Articulação de Competências (DAC) — 1º e 2º semestres
 
 **Integrantes:** Amilcar Silva Neto · Paulo Roberto Ribeiro Dias
-**Professor orientador:** 
 **Local e data:** Campo Grande – MS, outubro de 2026
 
 **Versão final, 28 de outubro de 2026.** Fontes externas conferidas nessa data. Os resultados técnicos correspondem ao MVP acadêmico concluído, já com os ajustes feitos após a conferência das fontes (seção 15). A conferência documental das leis não constitui certificação de conformidade para operação real.
