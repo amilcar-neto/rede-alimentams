@@ -19,7 +19,7 @@ Se a porta 3000 estiver ocupada: `PORTA=8080 docker compose up -d --build` (Powe
 Para encerrar: `docker compose down`. Para começar do zero com os dados de demonstração: `docker compose down -v` e suba de novo.
 Em Mac com chip Apple, o banco (imagem oficial do PostGIS, só amd64) roda por emulação e a primeira subida pode demorar mais.
 
-O que foi entregue em relação à Etapa 4 (e o que ficou de fora): [docs/CONFORMIDADE.md](docs/CONFORMIDADE.md).
+O que foi entregue em relação aos requisitos do projeto (e o que ficou de fora): [docs/CONFORMIDADE.md](docs/CONFORMIDADE.md). Relatório técnico completo: [docs/RELATORIO_TECNICO_FINAL.md](docs/RELATORIO_TECNICO_FINAL.md).
 
 ## Funcionalidades
 - Cadastro e login (JWT + bcrypt) de doadores e entidades receptoras, com CNPJ numérico ou alfanumérico (formato da Receita desde 07/2026) validado por dígito verificador.
@@ -39,14 +39,14 @@ O que foi entregue em relação à Etapa 4 (e o que ficou de fora): [docs/CONFOR
 ## Detalhes de execução
 
 ### Com Docker (avaliação e apresentação)
-O professor roda o projeto com este compose e a apresentação usa o notebook do grupo com o mesmo compose; a implantação em servidor ficou fora do escopo.
+É o jeito recomendado de rodar a demonstração. A implantação em servidor ficou fora do escopo desta versão.
 
 ```bash
 docker compose up -d --build
 ```
 Abra http://localhost:3000. O banco não publica porta (só o app o acessa, pela rede interna do Docker; para inspecionar: `docker compose exec db psql -U alimentams`); o app fica aberto na rede local para o celular.
 
-**Antes de cada ensaio/apresentação, recrie o banco.** O `init.sql` só roda com o volume vazio, e o seed usa horários relativos à criação do banco (a reserva do seed expira ~25 min depois). O comando abaixo apaga o volume e todos os dados da demonstração:
+**Antes de cada demonstração, recrie o banco.** O `init.sql` só roda com o volume vazio, e o seed usa horários relativos à criação do banco (a reserva do seed expira ~25 min depois). O comando abaixo apaga o volume e todos os dados da demonstração:
 ```bash
 docker compose down -v && docker compose up -d --build
 ```
@@ -128,22 +128,8 @@ Executa ondas de 20 e 200 buscas e de 20 e 200 disputas de reserva (440 requisi�
 | PUT | /notificacoes/lidas, /notificacoes/:id/lida | autenticado (apenas as próprias) |
 | WS | /ws | JWT no primeiro frame |
 
-## Para o grupo (fica fora do pacote de entrega)
-
-Estes arquivos existem só no repositório do grupo; o zip do professor não os inclui.
+## Mais documentação
 
 - [Roteiro de demonstração](docs/ROTEIRO_DEMO.md) (5–7 min, Cenário 1) e [roteiro de prints](docs/ROTEIRO_PRINTS.md) para o relatório.
 - [Implantação em servidor](docs/DEPLOY.md) com `docker-compose.prod.yml`, `deploy/Caddyfile` e `.env.example`: fora do escopo desta entrega, guardado como melhoria futura.
 - Como o projeto foi desenvolvido (automação com agentes, logs, revisões e checklists): [docs/agentes/LEIA-ME.md](docs/agentes/LEIA-ME.md). Registros antigos em `docs/agentes/historico/`.
-
-### Gerar o pacote do professor
-
-```bash
-node scripts/empacotar-entrega.mjs
-```
-
-Gera `entrega/rede-alimentams.zip` e copia o relatório para `entrega/Relatorio_Tecnico_Rede_AlimentaMS.pdf` (o professor quer o PDF separado do zip). O zip sai do **último commit** (alterações não commitadas ficam de fora), sem os itens marcados `export-ignore` em `.gitattributes`. Commite antes de empacotar. A pasta `entrega/` não é versionada.
-
-### Compartilhar com o grupo
-
-Use o repositório Git (ou um zip da pasta **sem** `.agentes/`, `backend/node_modules/` e `entrega/`). `node_modules` é recriado com `npm install`; `.agentes/` são logs locais da automação.
