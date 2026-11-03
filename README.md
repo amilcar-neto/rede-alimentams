@@ -3,6 +3,10 @@
 Plataforma que conecta estabelecimentos doadores a entidades receptoras.
 Stack: Node.js + Express, PostgreSQL + PostGIS, JWT + bcrypt, Docker.
 
+**Autores:** Amilcar Silva Neto e Paulo Roberto Ribeiro Dias. Projeto acadêmico do curso de Análise e Desenvolvimento de Sistemas da UCDB (Desafio de Articulação de Competências, 2026). Os dados de demonstração são todos fictícios.
+
+**Desenvolvido com agentes de IA:** a implementação, os testes e as revisões foram feitos por Codex e Claude, com um controlador próprio (`agentes.cmd`, `scripts/agentes/`) que reveza entre os dois quando um chega no limite de uso e guarda o estado entre execuções. Cada lote deixa log, revisão e checklist. Nós definimos o escopo, as regras de negócio e os critérios de aceite, e validamos o resultado. Como funcionou: [docs/agentes/LEIA-ME.md](docs/agentes/LEIA-ME.md).
+
 ## Como rodar (3 passos)
 
 Pré-requisito: **Docker Desktop** aberto (Windows/Mac) ou Docker + Compose (Linux). Primeira subida precisa de internet para baixar as imagens.
